@@ -57,7 +57,9 @@ function txlog(label, status, hash) {
 
 function saveConn() {
   try {
-    localStorage.setItem("stellarui.conn", JSON.stringify({ rpc: $("rpcUrl").value, vault: $("vaultAddr").value }));
+    // Only the RPC URL is remembered. The vault comes from the deployment config, so a
+    // redeploy can't be overridden by an address saved in an older session.
+    localStorage.setItem("stellarui.conn", JSON.stringify({ rpc: $("rpcUrl").value }));
   } catch {}
 }
 
@@ -65,7 +67,7 @@ function loadConn() {
   try {
     const c = JSON.parse(localStorage.getItem("stellarui.conn") || "{}");
     if (c.rpc) $("rpcUrl").value = c.rpc;
-    if (c.vault) $("vaultAddr").value = c.vault;
+    // vault is intentionally not restored; see saveConn.
   } catch {}
 }
 
@@ -775,7 +777,7 @@ async function boot() {
   config.walletConnectProjectId = wallet.walletConnectProjectId || "";
   loadConn();
   if (!$("rpcUrl").value) $("rpcUrl").value = config.rpcUrl;
-  if (!$("vaultAddr").value) $("vaultAddr").value = config.vault;
+  $("vaultAddr").value = config.vault;
   config.rpcUrl = $("rpcUrl").value.trim();
   config.vault = $("vaultAddr").value.trim();
   chain = createChain(config);
