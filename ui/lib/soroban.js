@@ -254,6 +254,10 @@ export const vault = {
 
   agentClaim: (chain, { agent, signTx }) => vaultCall(chain, agent, "agent_claim", [], signTx),
 
+  /** Testnet faucet on the test USDC token. Up to 1,000 USDC per call. */
+  faucet: (chain, { user, amount, signTx }) =>
+    send(chain, { source: user, contractId: chain.config.usdc, method: "faucet", args: [addr(user), i128(amount)], signTx }),
+
   /** Owner-only setters. `method` is one of the vault's admin functions. */
   admin: (chain, { admin, method, args = [], signTx }) => vaultCall(chain, admin, method, args, signTx),
 };

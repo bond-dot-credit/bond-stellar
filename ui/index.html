@@ -285,6 +285,7 @@
   @keyframes tin { from { opacity:0; transform:translateY(8px); } }
 
   .hidden { display:none !important; }
+  [hidden] { display:none !important; }
   .muted { color:var(--ink-2); }
   .kbd { font-family:"IBM Plex Mono",monospace; font-size:10px; background:var(--paper); border:1px solid var(--hair); border-radius:2px; padding:1px 5px; }
 
@@ -302,6 +303,8 @@
     .content { padding:18px 14px 60px; }
     .agrid { grid-template-columns:1fr; }
   }
+  .topwallet { flex:0 0 auto; min-width:0; padding:8px 14px; font-size:10.5px; }
+  .topbar-right { align-self:center; margin:0 14px; display:flex; align-items:center; gap:10px; }
 </style>
 </head>
 <body>
@@ -351,7 +354,10 @@
       <div class="tile"><div class="k">Deployed</div><div class="v" id="tbDeployed">—</div></div>
       <div class="tile"><div class="k">Status</div><div class="v" id="tbStatus" style="font-size:15px;font-family:'IBM Plex Mono',monospace;letter-spacing:.08em;">—</div></div>
       <div class="spacer"></div>
-      <div class="rolechip" id="roleChip"><span class="dot"></span><span id="roleText">Read-only</span></div>
+      <div class="topbar-right">
+      <div class="rolechip" id="roleChip" hidden><span class="dot"></span><span id="roleText">User</span></div>
+      <button class="abtn topwallet" id="walletBtn">Connect wallet</button>
+      </div>
     </div>
 
     <div class="content">
@@ -366,16 +372,6 @@
           <div class="connfld" style="flex:1.2">
             <label>Vault</label>
             <div class="iwrap"><input id="vaultAddr" spellcheck="false" /></div>
-          </div>
-          <div class="connfld" style="flex:1.2">
-            <label>Wallet</label>
-            <div class="iwrap"><input id="walletAddr" readonly placeholder="not connected" spellcheck="false" /></div>
-          </div>
-          <div class="connfld connbts">
-            <div class="quick" style="margin:0 0 6px">
-              <button id="disconnectBtn" title="drop the wallet, watch only">Read-only</button>
-            </div>
-            <button class="abtn" id="connectBtn">Connect wallet</button>
           </div>
         </div>
       </section>
@@ -413,6 +409,10 @@
                 <div class="small muted" id="depRoom" style="margin-top:8px">—</div>
               </div>
               <button class="abtn lime" id="depBtn">Deposit</button>
+              <div class="btnrow" style="margin-top:10px">
+                <button class="abtn ghost" id="faucetBtn">Get 100 test USDC</button>
+              </div>
+              <div class="small muted" style="margin-top:8px">Fees are paid in XLM. <a id="friendbotLink" href="https://friendbot.stellar.org" target="_blank" rel="noopener">Fund this wallet with testnet XLM</a> if it's empty.</div>
             </div>
 
             <div class="acard" id="withdrawCard">

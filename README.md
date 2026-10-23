@@ -73,8 +73,8 @@ installed wallets, but not WalletConnect.
 The console checks that the wallet is on the same network before it connects, and refuses to sign if the
 wallet has switched accounts since connecting.
 
-The console has no key field. It signs through the wallet, so keys are never stored in the browser.
-Admin pages only open for the admin wallet (`stellar-admin`). The manual deploy and redemption
+The console has no key field. Connect from the top-right button. It signs through the wallet, so keys are never stored in the browser.
+Admin pages only open for the admin wallet, GD3XOPCLWPJDGCYR6U36WKWSITTQZDM7IDO7I6YB5SZJJIIUS4BRAXB5. The manual deploy and redemption
 controls need the agent wallet (`stellar-agent`). Pages can be opened directly with `?view=activity`,
 `?view=transactions`, `?view=venues`, or `?view=admin`.
 

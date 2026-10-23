@@ -120,9 +120,7 @@ async function connect() {
       throw new Error(`Wallet is on a different network. Switch it to ${config.network} and try again.`);
     }
     user = address;
-    $("walletAddr").value = address;
-    $("connectBtn").textContent = short(address);
-    $("connectBtn").classList.add("connected");
+    $("walletBtn").textContent = `${short(address)} · disconnect`;
     saveConn();
     await refresh();
     show("dashboard");
@@ -143,12 +141,10 @@ function disconnect() {
   position = { shares: 0n, value: 0n };
   wallet = 0n;
   verified = false;
-  $("walletAddr").value = "";
-  $("connectBtn").textContent = "Connect wallet";
-  $("connectBtn").classList.remove("connected");
+  $("walletBtn").textContent = "Connect wallet";
   StellarWalletsKit.disconnect().catch(() => {});
   refresh();
-  toast("Read-only: wallet disconnected");
+  toast("Wallet disconnected");
 }
 
 // ----- data -----
@@ -228,8 +224,8 @@ function renderAll() {
   const role = roleOf();
   const chip = $("roleChip");
   chip.className = "rolechip" + (role === "owner" ? " owner" : role === "agent" ? " agent" : user ? " user" : "");
-  $("roleText").textContent =
-    role === "owner" ? "Admin · owner" : role === "agent" ? "Agent" : user ? "User" : "Read-only";
+  chip.hidden = !user;
+  $("roleText").textContent = role === "owner" ? "Admin" : role === "agent" ? "Agent" : "User";
 
   $("stTotal").innerHTML = `${fmt(total)}<small> USDC</small>`;
   $("stIdle").innerHTML = `${fmt(pool.idle)}<small> USDC</small>`;
@@ -242,6 +238,8 @@ function renderAll() {
   $("stOwner").textContent = short(roles.admin);
   $("stAgent").textContent = short(roles.agent);
 
+  $("friendbotLink").href = user ? `https://friendbot.stellar.org/?addr=${user}` : "https://friendbot.stellar.org";
+  $("faucetBtn").disabled = !user || busy;
   $("depRoom").textContent =
     !pool.kycOpen && user && !verified
       ? "Your address is not verified. Deposits are closed to verified accounts."
@@ -565,7 +563,7 @@ function initOpCfg() {
 const TOUR = [
   { title: "Welcome to the pool console", body: "This console runs the pooled USDC vault on Stellar. Anyone can deposit up to the cap and receive shares. An agent deploys the pooled USDC into an RWA aggregator, and you can withdraw from idle USDC at any time. This short tour shows the moving parts." },
   { sel: ".sidebar", title: "Navigation", body: "Dashboard, Venues, Activity, and Transactions are open to everyone. Operator → Admin holds the owner controls and is only enabled for the admin wallet. The footer shows the vault, the USDC asset, and the current ledger." },
-  { sel: "#connect", title: "Connect", body: "Connect a Stellar wallet set to the same network as the console (testnet here). The wallet picker lists the installed wallets. WalletConnect appears when a Reown project ID is configured. The role chip top-right is read from the contract: admin, agent, user, or read-only. The console never stores your keys." },
+  { sel: "#walletBtn", title: "Connect", body: "Connect a Stellar wallet set to the same network as the console (testnet here). The wallet picker lists the installed wallets. WalletConnect appears when a Reown project ID is configured. Once connected, the top-right shows your role, read from the contract: Admin, Agent, or User. The console never stores your keys." },
   { sel: ".topbar", title: "Live pool status", body: "Always visible: total assets, idle USDC in the vault, USDC deployed in the aggregator, and whether deposits are paused." },
   { view: "dashboard", sel: "#dashboard .stat-grid", title: "Dashboard", body: "Total assets is everything the pool holds. Idle is undeployed USDC that covers withdrawals. Deployed is working in the aggregator. Your wallet shows the connected wallet's test USDC." },
   { view: "dashboard", sel: "#dashboard .agrid", title: "Actions", body: "Deposit sends USDC into the pool, up to the cap. Withdraw burns your shares from idle USDC. The agent's recall card requests a redemption and claims it once it settles. Full exit burns every share in one transaction when idle covers it." },
@@ -645,8 +643,11 @@ function renderTourStep() {
 // ----- wiring -----
 
 function bind() {
-  $("connectBtn").onclick = connect;
-  $("disconnectBtn").onclick = disconnect;
+  $("walletBtn").onclick = () => (user ? disconnect() : connect());
+  $("faucetBtn").onclick = () => run("Get test USDC", async () => {
+    requireUser();
+    return vault.faucet(chain, { user, amount: toBaseUnits("100"), signTx: signerFor(user) });
+  });
   $("rpcUrl").onchange = () => { config.rpcUrl = $("rpcUrl").value.trim(); chain = createChain(config); saveConn(); refresh(); };
   $("vaultAddr").onchange = () => { config.vault = $("vaultAddr").value.trim(); saveConn(); refresh(); };
   $("refreshBtn").onclick = () => refresh();
@@ -784,7 +785,7 @@ async function boot() {
   initOpCfg();
   bind();
   const requested = new URLSearchParams(location.search).get("view");
-  if (views.includes(requested)) show(requested);
+  show(views.includes(requested) ? requested : "dashboard");
   await refresh();
   setInterval(refresh, 15_000);
 }

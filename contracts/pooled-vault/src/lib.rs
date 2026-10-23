@@ -118,6 +118,12 @@ pub struct KycOpenSet {
 }
 
 #[contractevent]
+pub struct AdminSet {
+    #[topic]
+    pub admin: Address,
+}
+
+#[contractevent]
 pub struct Verified {
     #[topic]
     pub user: Address,
@@ -247,6 +253,13 @@ impl PooledVault {
     }
 
     // ----- admin (pause / config / kyc) -----
+
+    /// Hand the admin role to another address. The current admin must sign.
+    pub fn set_admin(env: Env, new_admin: Address) {
+        admin(&env).require_auth();
+        env.storage().instance().set(&DataKey::Admin, &new_admin);
+        AdminSet { admin: new_admin }.publish(&env);
+    }
 
     pub fn set_paused(env: Env, paused: bool) {
         admin(&env).require_auth();

@@ -228,3 +228,17 @@ fn initialize_requires_admin_auth() {
         .try_initialize(&attacker, &attacker, &usdc, &agg, &CAP, &BUFFER)
         .is_err());
 }
+
+#[test]
+fn admin_can_hand_over_the_role() {
+    let env = Env::default();
+    let c = setup(&env, CAP, BUFFER);
+    let v = PooledVaultClient::new(&env, &c.vault);
+    let new_admin = Address::generate(&env);
+
+    v.set_admin(&new_admin);
+    assert_eq!(v.admin(), new_admin);
+    // The old admin no longer controls the pool.
+    env.mock_auths(&[]);
+    assert!(v.try_set_paused(&true).is_err());
+}
