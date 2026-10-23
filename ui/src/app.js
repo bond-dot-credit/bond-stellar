@@ -100,6 +100,9 @@ function setupWallet() {
 
 function signerFor(address) {
   return async (xdr) => {
+    // The wallet may have switched accounts since connect. Never sign for an address the user isn't showing.
+    const { address: current } = await StellarWalletsKit.getAddress();
+    if (current !== address) throw new Error("Wallet account changed. Reconnect to continue.");
     const { signedTxXdr } = await StellarWalletsKit.signTransaction(xdr, {
       networkPassphrase: config.networkPassphrase,
       address,
@@ -111,6 +114,11 @@ function signerFor(address) {
 async function connect() {
   try {
     const { address } = await StellarWalletsKit.authModal();
+    const { networkPassphrase } = await StellarWalletsKit.getNetwork();
+    if (networkPassphrase !== config.networkPassphrase) {
+      StellarWalletsKit.disconnect().catch(() => {});
+      throw new Error(`Wallet is on a different network. Switch it to ${config.network} and try again.`);
+    }
     user = address;
     $("walletAddr").value = address;
     $("connectBtn").textContent = short(address);
@@ -557,7 +565,7 @@ function initOpCfg() {
 const TOUR = [
   { title: "Welcome to the pool console", body: "This console runs the pooled USDC vault on Stellar. Anyone can deposit up to the cap and receive shares. An agent deploys the pooled USDC into an RWA aggregator, and you can withdraw from idle USDC at any time. This short tour shows the moving parts." },
   { sel: ".sidebar", title: "Navigation", body: "Dashboard, Venues, Activity, and Transactions are open to everyone. Operator → Admin holds the owner controls and is only enabled for the admin wallet. The footer shows the vault, the USDC asset, and the current ledger." },
-  { sel: "#connect", title: "Connect", body: "Connect a Stellar wallet on testnet (Freighter, xBull, Albedo, Lobstr, or WalletConnect). The role chip top-right is read from the contract: admin, agent, user, or read-only. The console never stores your keys." },
+  { sel: "#connect", title: "Connect", body: "Connect a Stellar wallet set to the same network as the console (testnet here). The wallet picker lists the installed wallets. WalletConnect appears when a Reown project ID is configured. The role chip top-right is read from the contract: admin, agent, user, or read-only. The console never stores your keys." },
   { sel: ".topbar", title: "Live pool status", body: "Always visible: total assets, idle USDC in the vault, USDC deployed in the aggregator, and whether deposits are paused." },
   { view: "dashboard", sel: "#dashboard .stat-grid", title: "Dashboard", body: "Total assets is everything the pool holds. Idle is undeployed USDC that covers withdrawals. Deployed is working in the aggregator. Your wallet shows the connected wallet's test USDC." },
   { view: "dashboard", sel: "#dashboard .agrid", title: "Actions", body: "Deposit sends USDC into the pool, up to the cap. Withdraw burns your shares from idle USDC. The agent's recall card requests a redemption and claims it once it settles. Full exit burns every share in one transaction when idle covers it." },
@@ -759,6 +767,11 @@ function bind() {
 
 async function boot() {
   config = await (await fetch("./config.json", { cache: "no-store" })).json();
+  // Optional wallet settings, kept apart from the deploy output so redeploys don't overwrite them.
+  const wallet = await fetch("./wallet.json", { cache: "no-store" })
+    .then((r) => (r.ok ? r.json() : {}))
+    .catch(() => ({}));
+  config.walletConnectProjectId = wallet.walletConnectProjectId || "";
   loadConn();
   if (!$("rpcUrl").value) $("rpcUrl").value = config.rpcUrl;
   if (!$("vaultAddr").value) $("vaultAddr").value = config.vault;

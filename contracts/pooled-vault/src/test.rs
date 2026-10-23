@@ -214,3 +214,17 @@ fn first_depositor_donation_does_not_zero_out_next_depositor() {
     assert!(v.deposit(&bob, &100) > 0);
     assert!(v.balance(&bob) > 0);
 }
+
+#[test]
+fn initialize_requires_admin_auth() {
+    // No mock_all_auths: an attacker front-running initialization must fail.
+    let env = Env::default();
+    let vault = env.register(PooledVault, ());
+    let client = PooledVaultClient::new(&env, &vault);
+    let attacker = Address::generate(&env);
+    let usdc = Address::generate(&env);
+    let agg = Address::generate(&env);
+    assert!(client
+        .try_initialize(&attacker, &attacker, &usdc, &agg, &CAP, &BUFFER)
+        .is_err());
+}

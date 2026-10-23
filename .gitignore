@@ -4,3 +4,4 @@ ui/dist/
 .env
 .DS_Store
 *.log
+ui/wallet.json

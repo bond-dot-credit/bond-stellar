@@ -178,8 +178,16 @@ fn set_total_shares(env: &Env, value: i128) {
     env.storage().instance().set(&DataKey::TotalShares, &value);
 }
 
+// Reads also extend the TTL, so an active holder's balance can't archive mid-position.
 fn shares_of(env: &Env, user: &Address) -> i128 {
-    env.storage().persistent().get(&DataKey::Shares(user.clone())).unwrap_or(0)
+    let key = DataKey::Shares(user.clone());
+    match env.storage().persistent().get(&key) {
+        Some(shares) => {
+            env.storage().persistent().extend_ttl(&key, TTL_THRESHOLD, TTL_EXTEND);
+            shares
+        }
+        None => 0,
+    }
 }
 
 fn set_shares_of(env: &Env, user: &Address, value: i128) {
@@ -189,7 +197,14 @@ fn set_shares_of(env: &Env, user: &Address, value: i128) {
 }
 
 fn is_verified(env: &Env, user: &Address) -> bool {
-    env.storage().persistent().get(&DataKey::Verified(user.clone())).unwrap_or(false)
+    let key = DataKey::Verified(user.clone());
+    match env.storage().persistent().get(&key) {
+        Some(verified) => {
+            env.storage().persistent().extend_ttl(&key, TTL_THRESHOLD, TTL_EXTEND);
+            verified
+        }
+        None => false,
+    }
 }
 
 /// Total assets = idle USDC held here + value of the aggregator position.
@@ -218,6 +233,9 @@ impl PooledVault {
         if env.storage().instance().has(&DataKey::Admin) {
             panic_with_error!(&env, Error::AlreadyInitialized);
         }
+        // Deploy and init are separate transactions. Requiring the admin's signature
+        // stops anyone else from initializing the contract first with their own addresses.
+        admin_addr.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin_addr);
         env.storage().instance().set(&DataKey::Agent, &agent_addr);
         env.storage().instance().set(&DataKey::Usdc, &usdc_addr);

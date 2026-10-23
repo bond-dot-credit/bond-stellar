@@ -73,6 +73,7 @@ impl MockAggregator {
         if env.storage().instance().has(&DataKey::Admin) {
             panic_with_error!(&env, Error::AlreadyInitialized);
         }
+        admin_addr.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin_addr);
         env.storage().instance().set(&DataKey::Usdc, &usdc_addr);
         env.storage().instance().set(&DataKey::Delay, &delay_seconds);

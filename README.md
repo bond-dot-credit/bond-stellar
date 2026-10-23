@@ -65,6 +65,14 @@ In the console, connect a wallet on testnet. The wallet needs a USDC trustline a
 minted to it. The deploy script mints 200 test USDC (2,000,000,000 base units) to `stellar-alice` and `stellar-bob`.
 To use one of them, import its secret into Freighter with `stellar keys secret stellar-alice`.
 
+WalletConnect is optional. It needs a Reown project ID. Create one at https://cloud.reown.com, then copy
+`ui/wallet.example.json` to `ui/wallet.json` and set `walletConnectProjectId`. The deploy script never
+touches that file. Without an ID the wallet picker still lists Freighter, xBull, Albedo, and the other
+installed wallets, but not WalletConnect.
+
+The console checks that the wallet is on the same network before it connects, and refuses to sign if the
+wallet has switched accounts since connecting.
+
 The console has no key field. It signs through the wallet, so keys are never stored in the browser.
 Admin pages only open for the admin wallet (`stellar-admin`). The manual deploy and redemption
 controls need the agent wallet (`stellar-agent`). Pages can be opened directly with `?view=activity`,
