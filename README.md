@@ -9,7 +9,7 @@ Testnet only for now. Mock aggregator, test USDC, and simulated KYC.
 - Plan: [docs/PLAN.md](docs/PLAN.md)
 - Contracts: [contracts/](contracts/) (Soroban, Rust)
 - Agent: [agent/agent.mjs](agent/agent.mjs) (Node, `@stellar/stellar-sdk`)
-- UI: [ui/](ui/) (static page, Stellar Wallets Kit)
+- Console: [ui/](ui/) (static page, Stellar Wallets Kit)
 
 ## Layout
 
@@ -19,9 +19,10 @@ contracts/
   mock-aggregator/    testnet stand-in for an RWA aggregator
 agent/agent.mjs       keeper loop: claim, deploy surplus, recall shortfall
 ui/
-  src/app.js          wallet connect, deposit, withdraw, pool state
-  lib/soroban.js      shared client used by the UI, agent, and smoke test
-  index.html          page; loads dist/app.js and config.json
+  index.html          console markup and styles (Dashboard, Venues, Activity, Transactions, Admin)
+  src/app.js          wallet connect, role gating, pool state, admin actions, tour
+  lib/soroban.js      shared client used by the console, agent, and smoke test
+  config.json         deployment config, written by the deploy script
 scripts/
   deploy-testnet.sh   deploy everything to testnet and write the config files
   smoke-testnet.mjs   end-to-end flow through the shared client
@@ -60,9 +61,14 @@ AGENT_SECRET="$(stellar keys secret stellar-agent)" npm run agent   # continuous
 npm run smoke:testnet
 ```
 
-In the UI, connect a wallet on testnet. The wallet needs a USDC trustline and test USDC
+In the console, connect a wallet on testnet. The wallet needs a USDC trustline and test USDC
 minted to it. The deploy script mints 200 test USDC (2,000,000,000 base units) to `stellar-alice` and `stellar-bob`.
 To use one of them, import its secret into Freighter with `stellar keys secret stellar-alice`.
+
+The console has no key field. It signs through the wallet, so keys are never stored in the browser.
+Admin pages only open for the admin wallet (`stellar-admin`). The manual deploy and redemption
+controls need the agent wallet (`stellar-agent`). Pages can be opened directly with `?view=activity`,
+`?view=transactions`, `?view=venues`, or `?view=admin`.
 
 ## Parameters
 
@@ -90,6 +96,8 @@ USDC uses 7 decimals on Stellar, so 1 USDC = 10,000,000 base units.
 - Contracts: 11 unit tests passing (`npm run test:contracts`).
 - Testnet: deployed and exercised. Deposit, agent deploy, agent redemption request, claim
   after delay, and withdraw were all run on-chain. See `deployments/testnet.json`.
-- UI: renders live testnet state in headless Chrome. The wallet signing flow has not been
-  run with a real wallet from this repo yet.
+- Console: renders Dashboard, Venues, Activity, and Transactions from live testnet state
+  (headless Chrome). Activity and Transactions are built from on-chain vault events.
+- Not yet run in a browser with a real wallet: connect, sign, deposit, withdraw, and the
+  admin pages. The transaction path is the same one the smoke test runs through the shared client.
 - Not started: mainnet, audit, real aggregator, real KYC.

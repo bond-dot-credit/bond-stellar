@@ -4,8 +4,8 @@
 //! from idle USDC only, and are never paused.
 
 use soroban_sdk::{
-    contract, contractclient, contracterror, contractimpl, contracttype, panic_with_error, token,
-    Address, Env,
+    contract, contractclient, contractevent, contracterror, contractimpl, contracttype, panic_with_error,
+    token, Address, Env,
 };
 
 // ponytail: shares are internal balances, not a SEP-41 token. Wallets can't transfer them yet. Upgrade path: implement the SEP-41 interface over the same balances.
@@ -57,6 +57,71 @@ pub trait AggregatorInterface {
     fn request_redeem(env: Env, vault: Address, amount: i128);
     fn claim(env: Env, vault: Address) -> i128;
     fn value_of(env: Env, vault: Address) -> i128;
+}
+
+// Events feed the console's Activity and Transactions pages.
+#[contractevent]
+pub struct Deposited {
+    #[topic]
+    pub user: Address,
+    pub amount: i128,
+    pub shares: i128,
+}
+
+#[contractevent]
+pub struct Withdrawn {
+    #[topic]
+    pub user: Address,
+    pub shares: i128,
+    pub amount: i128,
+}
+
+#[contractevent]
+pub struct Deployed {
+    pub amount: i128,
+}
+
+#[contractevent]
+pub struct RedeemRequested {
+    pub amount: i128,
+}
+
+#[contractevent]
+pub struct Claimed {
+    pub amount: i128,
+}
+
+#[contractevent]
+pub struct PausedSet {
+    pub paused: bool,
+}
+
+#[contractevent]
+pub struct CapSet {
+    pub cap: i128,
+}
+
+#[contractevent]
+pub struct BufferSet {
+    pub buffer: i128,
+}
+
+#[contractevent]
+pub struct AgentSet {
+    #[topic]
+    pub agent: Address,
+}
+
+#[contractevent]
+pub struct KycOpenSet {
+    pub open: bool,
+}
+
+#[contractevent]
+pub struct Verified {
+    #[topic]
+    pub user: Address,
+    pub verified: bool,
 }
 
 #[contract]
@@ -168,21 +233,25 @@ impl PooledVault {
     pub fn set_paused(env: Env, paused: bool) {
         admin(&env).require_auth();
         env.storage().instance().set(&DataKey::Paused, &paused);
+        PausedSet { paused }.publish(&env);
     }
 
     pub fn set_cap(env: Env, cap_amount: i128) {
         admin(&env).require_auth();
         env.storage().instance().set(&DataKey::Cap, &cap_amount);
+        CapSet { cap: cap_amount }.publish(&env);
     }
 
     pub fn set_buffer(env: Env, buffer_amount: i128) {
         admin(&env).require_auth();
         env.storage().instance().set(&DataKey::Buffer, &buffer_amount);
+        BufferSet { buffer: buffer_amount }.publish(&env);
     }
 
     pub fn set_agent(env: Env, agent_addr: Address) {
         admin(&env).require_auth();
         env.storage().instance().set(&DataKey::Agent, &agent_addr);
+        AgentSet { agent: agent_addr }.publish(&env);
     }
 
     // ponytail: simulated KYC is a flag, not a KycProvider trait. Upgrade path: a provider contract the vault calls from `deposit`.
@@ -191,13 +260,15 @@ impl PooledVault {
     pub fn set_kyc_open(env: Env, open: bool) {
         admin(&env).require_auth();
         env.storage().instance().set(&DataKey::KycOpen, &open);
+        KycOpenSet { open }.publish(&env);
     }
 
     pub fn set_verified(env: Env, user: Address, verified: bool) {
         admin(&env).require_auth();
-        let key = DataKey::Verified(user);
+        let key = DataKey::Verified(user.clone());
         env.storage().persistent().set(&key, &verified);
         env.storage().persistent().extend_ttl(&key, TTL_THRESHOLD, TTL_EXTEND);
+        Verified { user, verified }.publish(&env);
     }
 
     // ----- depositors -----
@@ -229,6 +300,7 @@ impl PooledVault {
         token::Client::new(&env, &usdc(&env)).transfer(&user, &env.current_contract_address(), &amount);
         set_total_shares(&env, total_shares(&env) + shares);
         set_shares_of(&env, &user, shares_of(&env, &user) + shares);
+        Deposited { user, amount, shares }.publish(&env);
         shares
     }
 
@@ -252,6 +324,7 @@ impl PooledVault {
         set_total_shares(&env, total_shares(&env) - shares);
         set_shares_of(&env, &user, shares_of(&env, &user) - shares);
         token::Client::new(&env, &usdc(&env)).transfer(&env.current_contract_address(), &user, &amount);
+        Withdrawn { user, shares, amount }.publish(&env);
         amount
     }
 
@@ -272,6 +345,7 @@ impl PooledVault {
         let vault = env.current_contract_address();
         token::Client::new(&env, &usdc(&env)).transfer(&vault, &aggregator(&env), &amount);
         AggregatorClient::new(&env, &aggregator(&env)).deposit(&vault, &amount);
+        Deployed { amount }.publish(&env);
     }
 
     /// Ask the aggregator to redeem `amount` of USDC. Pays out after its redemption delay.
@@ -282,13 +356,18 @@ impl PooledVault {
             panic_with_error!(&env, Error::ZeroAmount);
         }
         AggregatorClient::new(&env, &aggregator(&env)).request_redeem(&env.current_contract_address(), &amount);
+        RedeemRequested { amount }.publish(&env);
     }
 
     /// Claim any redemption that has finished settling. Returns the amount received.
     pub fn agent_claim(env: Env) -> i128 {
         agent(&env).require_auth();
         bump_instance(&env);
-        AggregatorClient::new(&env, &aggregator(&env)).claim(&env.current_contract_address())
+        let claimed = AggregatorClient::new(&env, &aggregator(&env)).claim(&env.current_contract_address());
+        if claimed > 0 {
+            Claimed { amount: claimed }.publish(&env);
+        }
+        claimed
     }
 
     // ----- views -----

@@ -1,123 +1,610 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Bond Stellar · Pooled Vault</title>
-  <link rel="stylesheet" href="./styles.css" />
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Bond Stellar — Pool Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,300;6..72,400;6..72,500&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --paper:#E7EAE9; --ink:#101413; --ink-2:#535D59; --rule:#C9CFCD; --hair:#D9DEDC;
+    --seal:#1F3D33; --seal-2:#2A4D40; --lime:#BCED62; --white:#fff;
+    --green:#3D7A42; --amber:#B8860B; --red:#C6483C;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html { scroll-behavior:smooth; }
+  body {
+    background:var(--paper); color:var(--ink);
+    font:14px/1.5 "IBM Plex Sans", system-ui, sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .mono { font-family:"IBM Plex Mono", ui-monospace, monospace; }
+  .serif { font-family:"Newsreader", Georgia, serif; font-weight:300; letter-spacing:-.02em; }
+  a { color:var(--seal); }
+
+  /* ── shell: sidebar + topbar + content ─────────────── */
+  .shell { display:flex; min-height:100vh; }
+  .sidebar {
+    width:220px; flex:0 0 220px; position:sticky; top:0; height:100vh; overflow-y:auto;
+    background:linear-gradient(180deg, var(--seal) 0%, #14271F 100%);
+    color:#DCE4E0; display:flex; flex-direction:column; padding:22px 0;
+  }
+  .brand { padding:0 20px 22px; border-bottom:1px solid rgba(255,255,255,.08); }
+  .brand .mark {
+    font-family:"IBM Plex Mono",monospace; font-size:10px; letter-spacing:.22em;
+    color:var(--lime); text-transform:uppercase;
+  }
+  .brand .name { font-family:"Newsreader",serif; font-size:22px; font-weight:400; color:#fff; margin-top:4px; letter-spacing:-.01em; }
+  .brand .sub { font-size:11px; color:rgba(220,228,224,.55); margin-top:2px; }
+  .nav { flex:1; padding:14px 0; }
+  .nav .group {
+    font-family:"IBM Plex Mono",monospace; font-size:9px; letter-spacing:.18em;
+    text-transform:uppercase; color:rgba(220,228,224,.4); padding:14px 20px 6px;
+  }
+  .nav a {
+    display:flex; align-items:center; gap:10px; padding:8px 20px; font-size:13px;
+    color:rgba(220,228,224,.78); text-decoration:none; border-left:2px solid transparent;
+  }
+  .nav a:hover { color:#fff; background:rgba(188,237,98,.06); }
+  .nav a.active { color:var(--lime); border-left-color:var(--lime); background:rgba(188,237,98,.08); }
+  .nav a.disabled { opacity:.35; cursor:not-allowed; }
+  .nav a.disabled:hover { color:rgba(220,228,224,.78); background:transparent; }
+  .nav a svg { width:14px; height:14px; flex:0 0 14px; opacity:.8; }
+  .side-foot {
+    padding:14px 20px 0; border-top:1px solid rgba(255,255,255,.08);
+    font-family:"IBM Plex Mono",monospace; font-size:10px; color:rgba(220,228,224,.45); line-height:1.8;
+  }
+  .side-foot b { color:rgba(220,228,224,.8); font-weight:500; }
+
+  .main { flex:1; min-width:0; display:flex; flex-direction:column; }
+  .topbar {
+    position:sticky; top:0; z-index:20; height:54px; display:flex; align-items:stretch;
+    background:rgba(231,234,233,.82); backdrop-filter:blur(8px);
+    border-bottom:1px solid var(--rule);
+  }
+  .tile {
+    display:flex; flex-direction:column; justify-content:center; padding:0 18px;
+    border-right:1px solid var(--rule); min-width:118px;
+  }
+  .tile .k { font-family:"IBM Plex Mono",monospace; font-size:8.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-2); }
+  .tile .v { font-family:"Newsreader",serif; font-size:19px; font-weight:400; letter-spacing:-.01em; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .tile .v small { font-family:"IBM Plex Mono",monospace; font-size:9px; color:var(--ink-2); letter-spacing:.1em; margin-left:4px; }
+  .topbar .spacer { flex:1; }
+  .rolechip {
+    align-self:center; margin:0 14px; display:flex; align-items:center; gap:8px;
+    font-family:"IBM Plex Mono",monospace; font-size:10px; letter-spacing:.12em; text-transform:uppercase;
+    padding:7px 14px; border-radius:20px; border:1px solid var(--rule); background:var(--white); color:var(--ink-2);
+  }
+  .rolechip .dot { width:7px; height:7px; border-radius:50%; background:var(--ink-2); }
+  .rolechip.owner { border-color:var(--seal); color:var(--seal); }
+  .rolechip.owner .dot { background:var(--seal); }
+  .rolechip.agent { border-color:var(--amber); color:var(--amber); }
+  .rolechip.agent .dot { background:var(--amber); }
+  .rolechip.user { border-color:var(--green); color:var(--green); }
+  .rolechip.user .dot { background:var(--green); animation:pdot 2s infinite; }
+  @keyframes pdot { 0%,100%{opacity:1} 50%{opacity:.35} }
+
+  .content { padding:26px 30px 80px; max-width:1080px; width:100%; margin:0 auto; }
+
+  /* ── panels ────────────────────────────────────────── */
+  .panel { background:var(--white); border:1px solid var(--rule); border-radius:3px; margin-bottom:18px; scroll-margin-top:70px; }
+  .phead { display:flex; align-items:baseline; gap:12px; padding:16px 20px 0; }
+  .phead h2 { font-family:"Newsreader",serif; font-size:21px; font-weight:400; letter-spacing:-.01em; }
+  .ptag { font-family:"IBM Plex Mono",monospace; font-size:9px; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-2); }
+  .phead .pright { margin-left:auto; }
+  .pbody { padding:16px 20px 20px; }
+  .pfoot { border-top:1px solid var(--hair); padding:10px 20px; font-size:12px; color:var(--ink-2); }
+
+  .stat-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:1px; background:var(--hair); border:1px solid var(--hair); border-radius:3px; overflow:hidden; }
+  .stat { background:var(--white); padding:14px 16px; }
+  .stat .k { font-family:"IBM Plex Mono",monospace; font-size:9px; letter-spacing:.15em; text-transform:uppercase; color:var(--ink-2); }
+  .stat .v { font-family:"Newsreader",serif; font-size:30px; font-weight:300; letter-spacing:-.02em; margin-top:4px; font-variant-numeric:tabular-nums; line-height:1.1; }
+  .stat .v small { font-family:"IBM Plex Mono",monospace; font-size:10px; color:var(--ink-2); letter-spacing:.08em; }
+  .stat .s { font-family:"IBM Plex Mono",monospace; font-size:10.5px; color:var(--ink-2); margin-top:4px; word-break:break-all; }
+
+  /* ── forms ─────────────────────────────────────────── */
+  .fld { margin-bottom:14px; }
+  .fld > label { display:block; font-family:"IBM Plex Mono",monospace; font-size:9px; letter-spacing:.15em; text-transform:uppercase; color:var(--ink-2); margin-bottom:6px; }
+  .fld > label .hint { text-transform:none; letter-spacing:0; color:var(--ink-2); opacity:.8; }
+  .iwrap {
+    display:flex; align-items:center; gap:8px; background:var(--paper);
+    border:1px solid var(--rule); border-radius:2px; padding:0 10px;
+  }
+  .iwrap:focus-within { border-color:var(--seal); }
+  .iwrap input, .iwrap select {
+    flex:1; min-width:0; border:0; background:transparent; padding:10px 0; font:inherit;
+    font-family:"IBM Plex Mono",monospace; font-size:14px; color:var(--ink); outline:none;
+  }
+  .iwrap .suffix { font-family:"IBM Plex Mono",monospace; font-size:10px; letter-spacing:.1em; color:var(--ink-2); }
+  .maxbtn {
+    border:1px solid var(--rule); background:var(--white); border-radius:2px;
+    font-family:"IBM Plex Mono",monospace; font-size:9px; letter-spacing:.14em;
+    padding:4px 8px; cursor:pointer; color:var(--ink-2);
+  }
+  .maxbtn:hover { border-color:var(--seal); color:var(--seal); }
+  .quick { display:flex; gap:6px; margin-top:6px; }
+  .quick button {
+    border:1px solid var(--hair); background:var(--white); border-radius:20px; cursor:pointer;
+    font-family:"IBM Plex Mono",monospace; font-size:9.5px; letter-spacing:.1em; padding:3px 10px; color:var(--ink-2);
+  }
+  .quick button:hover { border-color:var(--seal); color:var(--seal); }
+
+  .btnrow { display:flex; gap:10px; flex-wrap:wrap; }
+  .abtn {
+    flex:1; min-width:120px; border:0; border-radius:2px; cursor:pointer;
+    background:var(--seal); color:#fff; font-family:"IBM Plex Mono",monospace;
+    font-size:11px; letter-spacing:.14em; text-transform:uppercase; padding:12px 18px;
+  }
+  .abtn:hover { background:#254834; }
+  .abtn:disabled { opacity:.45; cursor:not-allowed; }
+  .abtn.lime { background:var(--lime); color:#182B08; }
+  .abtn.lime:hover { filter:brightness(1.05); }
+  .abtn.ghost { background:var(--white); border:1px solid var(--rule); color:var(--ink); }
+  .abtn.ghost:hover { border-color:var(--seal); color:var(--seal); background:var(--white); }
+  .abtn.danger { background:var(--red); }
+  .abtn.danger:hover { background:#D96A5B; }
+
+  /* ── pills / dots ──────────────────────────────────── */
+  .pill {
+    display:inline-flex; align-items:center; gap:6px; border:1px solid var(--rule);
+    border-radius:20px; padding:2px 10px; font-family:"IBM Plex Mono",monospace;
+    font-size:9.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-2); background:var(--white);
+  }
+  .pill .dot { width:6px; height:6px; border-radius:50%; background:currentColor; }
+  .pill.ok { color:var(--green); border-color:#BFD4C1; }
+  .pill.warn { color:var(--amber); border-color:#E4D3A1; }
+  .pill.bad { color:var(--red); border-color:#E4B6B0; }
+  .pill.live .dot { background:var(--lime); animation:pdot 2s infinite; }
+
+  /* ── tables ────────────────────────────────────────── */
+  table { width:100%; border-collapse:collapse; }
+  th {
+    font-family:"IBM Plex Mono",monospace; font-size:8.5px; letter-spacing:.16em; text-transform:uppercase;
+    color:var(--ink-2); text-align:left; padding:8px 12px; border-bottom:1px solid var(--rule); font-weight:500;
+  }
+  td { padding:10px 12px; border-bottom:1px solid var(--hair); font-size:13px; font-variant-numeric:tabular-nums; }
+  tr:last-child td { border-bottom:0; }
+  tbody tr:hover { background:rgba(31,61,51,.04); }
+
+  /* ── two-col action grid ───────────────────────────── */
+  .agrid { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+  .acard { border:1px solid var(--hair); border-radius:3px; padding:16px; }
+  .acard h3 { font-family:"Newsreader",serif; font-size:17px; font-weight:400; margin-bottom:2px; }
+  .acard .adesc { font-size:12px; color:var(--ink-2); margin-bottom:14px; }
+
+  /* ── tx log + feed ─────────────────────────────────── */
+  .txlog { display:flex; flex-direction:column; }
+  .txrow { display:flex; align-items:center; gap:12px; padding:9px 0; border-bottom:1px solid var(--hair); font-size:12.5px; }
+  .txrow:last-child { border-bottom:0; }
+  .txrow .tlabel { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .txrow .thash { font-family:"IBM Plex Mono",monospace; font-size:10.5px; color:var(--ink-2); }
+  .chip {
+    flex:0 0 auto; font-family:"IBM Plex Mono",monospace; font-size:8.5px; letter-spacing:.14em; text-transform:uppercase;
+    padding:3px 8px; border-radius:2px; min-width:64px; text-align:center;
+  }
+  .chip.pending { background:#F4E9C9; color:var(--amber); }
+  .chip.mined { background:#DCE9DC; color:var(--green); }
+  .chip.failed { background:#F2DAD7; color:var(--red); }
+  .feed { max-height:300px; overflow-y:auto; }
+  .feed-item { display:flex; gap:12px; padding:8px 0; border-bottom:1px solid var(--hair); font-size:12.5px; align-items:baseline; }
+  .feed-item:last-child { border-bottom:0; }
+  .feed-item .blk { font-family:"IBM Plex Mono",monospace; font-size:10px; color:var(--ink-2); flex:0 0 70px; }
+  .txrow .thash a, .feed-item a.blk { color:var(--ink-2); text-decoration:none; }
+  .txrow .thash a:hover, .feed-item a.blk:hover { color:var(--seal); }
+
+  /* ── local tx explorer ─────────────────────────────── */
+  tr.txclick { cursor:pointer; }
+  .dgrid { display:grid; grid-template-columns:120px 1fr; row-gap:8px; column-gap:14px; margin-top:12px; }
+  .dgrid dt { font-family:"IBM Plex Mono",monospace; font-size:8.5px; letter-spacing:.15em; text-transform:uppercase; color:var(--ink-2); align-self:center; }
+  .dgrid dd { font-family:"IBM Plex Mono",monospace; font-size:12px; word-break:break-all; margin:0; }
+  .dgrid dd .maxbtn { margin-left:8px; }
+  .devents { border-top:1px solid var(--hair); margin-top:14px; padding-top:10px; }
+  .devent { display:flex; gap:10px; padding:5px 0; font-size:12px; align-items:baseline; border-bottom:1px solid var(--hair); }
+  .devent:last-child { border-bottom:0; }
+  .devent .tag { flex:0 0 52px; font-family:"IBM Plex Mono",monospace; font-size:8.5px; letter-spacing:.12em; text-transform:uppercase; border:1px solid var(--rule); border-radius:2px; padding:1px 4px; text-align:center; color:var(--ink-2); }
+  .devent .tag.vault { color:var(--seal); border-color:#B9C9C2; }
+  .devent .tag.usdc { color:var(--amber); border-color:#E4D3A1; }
+  .devent .ename { font-weight:600; flex:0 0 auto; }
+  .devent .eargs { font-family:"IBM Plex Mono",monospace; font-size:11px; color:var(--ink-2); word-break:break-all; }
+  .feed-item b { font-weight:600; }
+
+  /* ── stepper (full exit) ───────────────────────────── */
+  .steps { display:none; margin-top:14px; border-top:1px solid var(--hair); padding-top:12px; }
+  .steps.on { display:block; }
+  .step { display:flex; align-items:center; gap:10px; padding:5px 0; font-size:12.5px; color:var(--ink-2); }
+  .step .sdot {
+    width:16px; height:16px; border-radius:50%; border:1px solid var(--rule); flex:0 0 16px;
+    display:flex; align-items:center; justify-content:center; font-family:"IBM Plex Mono",monospace; font-size:9px;
+  }
+  .step.doing { color:var(--ink); }
+  .step.doing .sdot { border-color:var(--amber); border-top-color:transparent; animation:tspin .7s linear infinite; }
+  .step.done { color:var(--ink); }
+  .step.done .sdot { background:var(--seal); border-color:var(--seal); color:var(--lime); }
+  .step.fail .sdot { background:var(--red); border-color:var(--red); color:#fff; }
+  @keyframes tspin { to { transform:rotate(360deg); } }
+  a.vname { font-weight:600; color:var(--ink); text-decoration:none; font-size:13.5px; }
+  tr.vrow { cursor:pointer; }
+  tr.vrow:hover td { background:rgba(31,61,51,.04); }
+  td.vchev { text-align:right; color:var(--ink-2); font-size:11px; width:34px; }
+  tr.vdetail > td { background:var(--paper); padding:16px 18px; border-bottom:1px solid var(--rule); }
+
+  /* ── generated config blocks ───────────────────────── */
+  .cfgpre {
+    background:var(--paper); border:1px solid var(--rule); border-radius:2px;
+    padding:12px 14px; font-family:"IBM Plex Mono",monospace; font-size:11px;
+    line-height:1.65; white-space:pre-wrap; word-break:break-all;
+    max-height:240px; overflow-y:auto; margin:0;
+  }
+
+  /* ── compact connection bar ────────────────────────── */
+  .conn { display:flex; gap:14px; align-items:flex-end; flex-wrap:wrap; padding:14px 20px; }
+  .connfld { min-width:170px; }
+  .connfld > label { margin-bottom:4px; }
+  .conn .iwrap input { padding:8px 0; font-size:13px; }
+  .connbts { flex:1.1; min-width:240px; }
+  .connbts .abtn { padding:9px 16px; }
+
+  /* ── first-visit tour ──────────────────────────────── */
+  #tourBlock { position:fixed; inset:0; z-index:75; display:none; }
+  #tourSpot {
+    position:fixed; z-index:80; display:none; pointer-events:none;
+    border:2px solid var(--lime); border-radius:4px;
+    box-shadow:0 0 0 9999px rgba(16,20,19,.62);
+    transition:top .3s, left .3s, width .3s, height .3s;
+  }
+  #tourTip {
+    position:fixed; z-index:90; display:none; width:340px; max-width:calc(100vw - 28px);
+    background:var(--white); border:1px solid var(--rule); border-radius:3px;
+    box-shadow:0 14px 44px rgba(16,20,19,.35); padding:18px 20px;
+  }
+  #tourTip h3 { font-family:"Newsreader",serif; font-size:18px; font-weight:400; letter-spacing:-.01em; margin:0 0 6px; }
+  #tourTip p { font-size:13px; color:var(--ink-2); line-height:1.6; margin:0; }
+  #tourTip .tourbar { display:flex; gap:8px; margin-top:16px; align-items:center; }
+  #tourTip .tourbar .cnt { font-family:"IBM Plex Mono",monospace; font-size:9.5px; letter-spacing:.14em; color:var(--ink-2); margin-right:auto; }
+  #tourTip .tourbar .tbtn {
+    border:0; border-radius:2px; cursor:pointer; font-family:"IBM Plex Mono",monospace;
+    font-size:10px; letter-spacing:.12em; text-transform:uppercase; padding:8px 14px;
+  }
+  #tourTip .tbtn.next { background:var(--seal); color:#fff; }
+  #tourTip .tbtn.next:hover { background:#254834; }
+  #tourTip .tbtn.ghost { background:transparent; border:1px solid var(--rule); color:var(--ink-2); }
+  #tourTip .tbtn.ghost:hover { border-color:var(--seal); color:var(--seal); }
+  .empty { padding:18px 0; text-align:center; color:var(--ink-2); font-size:12.5px; }
+
+  /* ── toasts ────────────────────────────────────────── */
+  #toasts { position:fixed; bottom:22px; right:22px; z-index:60; display:flex; flex-direction:column; gap:8px; max-width:420px; }
+  .toast {
+    background:var(--ink); color:#E7EAE9; border-left:2px solid var(--lime);
+    padding:11px 16px; border-radius:2px; font-size:12.5px; box-shadow:0 8px 24px rgba(16,20,19,.25);
+    animation:tin .25s ease; word-break:break-word;
+  }
+  .toast.err { border-left-color:#D96A5B; }
+  .toast.out { opacity:0; transform:translateY(6px); transition:all .3s; }
+  @keyframes tin { from { opacity:0; transform:translateY(8px); } }
+
+  .hidden { display:none !important; }
+  .muted { color:var(--ink-2); }
+  .kbd { font-family:"IBM Plex Mono",monospace; font-size:10px; background:var(--paper); border:1px solid var(--hair); border-radius:2px; padding:1px 5px; }
+
+  @media (max-width: 900px) {
+    .shell { flex-direction:column; }
+    .sidebar { width:100%; flex:none; height:auto; position:static; padding:14px 0 0; }
+    .brand { display:flex; align-items:baseline; gap:12px; padding:0 16px 12px; }
+    .nav { display:flex; overflow-x:auto; padding:0 8px; border-top:1px solid rgba(255,255,255,.08); }
+    .nav .group { display:none; }
+    .nav a { white-space:nowrap; border-left:0; border-bottom:2px solid transparent; padding:10px 12px; }
+    .nav a.active { border-bottom-color:var(--lime); }
+    .side-foot { display:none; }
+    .topbar { overflow-x:auto; }
+    .tile { min-width:100px; padding:0 12px; }
+    .content { padding:18px 14px 60px; }
+    .agrid { grid-template-columns:1fr; }
+  }
+</style>
 </head>
 <body>
-  <header class="topbar">
+<div class="shell">
+
+  <!-- ══ SIDEBAR ══ -->
+  <aside class="sidebar">
     <div class="brand">
-      <span class="logo">◆</span>
       <div>
-        <div class="title">Bond Stellar</div>
-        <div class="subtitle">Pooled USDC vault · RWA aggregator</div>
+        <div class="mark">Stellar · <span id="networkName">testnet</span></div>
+        <div class="name">Pool Vault</div>
       </div>
+      <div class="sub">Pooled USDC console</div>
     </div>
-    <div class="top-right">
-      <span id="network-badge" class="pill">testnet</span>
-      <button id="wallet-button" class="btn primary">Connect wallet</button>
+    <nav class="nav" id="nav">
+      <div class="group">Vault</div>
+      <a href="#dashboard" class="active" data-nav="dashboard">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1.5" y="1.5" width="13" height="13" rx="2"/><path d="M1.5 6.5h13M6.5 6.5v8"/></svg>
+        Dashboard</a>
+      <a href="#venues" data-nav="venues">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 13V6l6-3.5L14 6v7M5.5 13v-4h5v4"/></svg>
+        Venues</a>
+      <a href="#activity" data-nav="activity">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 4h12M2 8h8M2 12h10"/></svg>
+        Activity</a>
+      <a href="#transactions" data-nav="transactions">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="7" cy="7" r="5.5"/><path d="M11.5 11.5L14 14"/></svg>
+        Transactions</a>
+      <div class="group">Operator</div>
+      <a href="#admin" data-nav="admin" id="navAdmin" class="disabled" title="Owner key required">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="6.5"/><path d="M8 4.5V8l2.5 1.5"/></svg>
+        Admin</a>
+    </nav>
+    <div class="side-foot">
+      <b>VAULT</b><br /><span id="footVault">—</span><br />
+      <b>USDC</b><br /><span id="footAsset">—</span><br />
+      <b>LEDGER</b> <span id="footBlock">—</span><br />
+      <button class="maxbtn" id="replayTour" style="margin-top:10px;background:transparent;color:rgba(220,228,224,.7);border-color:rgba(255,255,255,.2)">Replay tour</button>
     </div>
-  </header>
+  </aside>
 
-  <div class="banner">
-    Testnet demo. Mock aggregator, test USDC, and simulated KYC. No real funds.
+  <div class="main">
+    <!-- ══ TOPBAR ══ -->
+    <div class="topbar">
+      <div class="tile"><div class="k">Total assets</div><div class="v" id="tbTotal">—</div></div>
+      <div class="tile"><div class="k">Idle</div><div class="v" id="tbIdle">—</div></div>
+      <div class="tile"><div class="k">Deployed</div><div class="v" id="tbDeployed">—</div></div>
+      <div class="tile"><div class="k">Status</div><div class="v" id="tbStatus" style="font-size:15px;font-family:'IBM Plex Mono',monospace;letter-spacing:.08em;">—</div></div>
+      <div class="spacer"></div>
+      <div class="rolechip" id="roleChip"><span class="dot"></span><span id="roleText">Read-only</span></div>
+    </div>
+
+    <div class="content">
+
+      <!-- ══ CONNECT ══ -->
+      <section class="panel" id="connect">
+        <div class="pbody conn">
+          <div class="connfld" style="flex:1">
+            <label>Soroban RPC <span class="hint">— testnet</span></label>
+            <div class="iwrap"><input id="rpcUrl" spellcheck="false" /></div>
+          </div>
+          <div class="connfld" style="flex:1.2">
+            <label>Vault</label>
+            <div class="iwrap"><input id="vaultAddr" spellcheck="false" /></div>
+          </div>
+          <div class="connfld" style="flex:1.2">
+            <label>Wallet</label>
+            <div class="iwrap"><input id="walletAddr" readonly placeholder="not connected" spellcheck="false" /></div>
+          </div>
+          <div class="connfld connbts">
+            <div class="quick" style="margin:0 0 6px">
+              <button id="disconnectBtn" title="drop the wallet, watch only">Read-only</button>
+            </div>
+            <button class="abtn" id="connectBtn">Connect wallet</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ DASHBOARD ══ -->
+      <section class="panel hidden" id="dashboard">
+        <div class="phead">
+          <h2>Dashboard</h2><span class="ptag">Net asset value</span>
+          <div class="pright"><button class="maxbtn" id="refreshBtn">↻ Refresh</button></div>
+        </div>
+        <div class="pbody">
+          <div class="stat-grid">
+            <div class="stat"><div class="k">Total assets</div><div class="v" id="stTotal">—</div><div class="s">USDC · pool NAV</div></div>
+            <div class="stat"><div class="k">Idle in vault</div><div class="v" id="stIdle">—</div><div class="s">undeployed USDC</div></div>
+            <div class="stat"><div class="k">Deployed</div><div class="v" id="stDeployed">—</div><div class="s" id="stVenueCount">—</div></div>
+            <div class="stat"><div class="k">Your wallet</div><div class="v" id="stYou">—</div><div class="s" id="stAddr">connect a wallet</div></div>
+            <div class="stat"><div class="k">Admin</div><div class="v" style="font-size:17px" id="stOwner">—</div><div class="s">owner · full control</div></div>
+            <div class="stat"><div class="k">Agent</div><div class="v" style="font-size:17px" id="stAgent">—</div><div class="s">keeper · moves USDC only into the aggregator</div></div>
+          </div>
+          <div style="display:flex;align-items:baseline;gap:10px;margin:24px 0 12px">
+            <h3 class="serif" style="font-size:17px;font-weight:400">Actions</h3>
+            <span class="ptag">Signed with the connected wallet</span>
+          </div>
+          <div class="agrid">
+            <div class="acard">
+              <h3>Deposit</h3>
+              <div class="adesc">Send USDC into the pool and receive shares. Anyone can deposit while the cap has room.</div>
+              <div class="fld">
+                <div class="iwrap">
+                  <input id="depAmt" type="number" min="0" step="any" placeholder="0.00" />
+                  <span class="suffix">USDC</span>
+                  <button class="maxbtn" id="depMaxBtn">MAX</button>
+                </div>
+                <div class="quick"><button data-q="dep:25">25%</button><button data-q="dep:50">50%</button><button data-q="dep:75">75%</button><button data-q="dep:100">MAX</button></div>
+                <div class="small muted" id="depRoom" style="margin-top:8px">—</div>
+              </div>
+              <button class="abtn lime" id="depBtn">Deposit</button>
+            </div>
+
+            <div class="acard" id="withdrawCard">
+              <h3>Withdraw</h3>
+              <div class="adesc">Burn your shares for USDC from the idle balance. Withdrawals are never paused. If idle is short, retry after the agent refills it.</div>
+              <div class="fld">
+                <div class="iwrap">
+                  <input id="wdAmt" type="number" min="0" step="any" placeholder="0.00" />
+                  <span class="suffix">USDC</span>
+                  <button class="maxbtn" id="wdMaxBtn">MAX</button>
+                </div>
+                <div class="small muted" id="wdHint" style="margin-top:8px">—</div>
+              </div>
+              <button class="abtn" id="wdBtn">Withdraw</button>
+            </div>
+
+            <div class="acard" id="recallCard">
+              <h3>Recall from aggregator</h3>
+              <div class="adesc">Agent only. Request a redemption to refill idle USDC, then claim it once it settles.</div>
+              <div class="fld">
+                <div class="iwrap">
+                  <input id="recallAmt" type="number" min="0" step="any" placeholder="0.00" />
+                  <span class="suffix">USDC</span>
+                </div>
+              </div>
+              <div class="btnrow">
+                <button class="abtn ghost" id="recallBtn">Request redemption</button>
+                <button class="abtn ghost" id="claimBtn">Claim settled</button>
+              </div>
+            </div>
+
+            <div class="acard" id="exitCard">
+              <h3>Full exit</h3>
+              <div class="adesc">Burn every share you hold in one transaction. Needs enough idle USDC to cover the whole position.</div>
+              <button class="abtn danger" id="exitBtn">Exit → all shares</button>
+              <div class="steps" id="exitSteps"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ VENUES ══ -->
+      <section class="panel hidden" id="venues">
+        <div class="phead"><h2>Venues</h2><span class="ptag">Aggregator &amp; positions</span></div>
+        <div class="pbody" style="padding-top:6px">
+          <table>
+            <thead><tr><th>Venue</th><th>Status</th><th>Share price</th><th>Position</th><th>% NAV</th><th>Pending</th><th>Unlock</th><th style="width:34px"></th></tr></thead>
+            <tbody id="venuesBody"><tr><td colspan="8"><div class="empty">Connecting…</div></td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ══ ADMIN ══ -->
+      <section class="panel hidden" id="admin">
+        <div class="phead"><h2>Admin</h2><span class="ptag">Owner key only</span></div>
+        <div class="pbody">
+          <div class="agrid">
+            <div class="acard">
+              <h3>Emergency controls</h3>
+              <div class="adesc">Pause blocks deposits only. Withdrawals, redemptions, and claims stay live.</div>
+              <div class="btnrow">
+                <button class="abtn danger" id="pauseBtn">Pause deposits</button>
+                <button class="abtn" id="unpauseBtn">Unpause</button>
+              </div>
+            </div>
+            <div class="acard">
+              <h3>Rotate agent</h3>
+              <div class="adesc">Instant. The old key loses its agent powers in the same ledger.</div>
+              <div class="fld">
+                <div class="iwrap"><input id="newAgent" placeholder="G… new agent address" spellcheck="false" /></div>
+              </div>
+              <button class="abtn" id="setAgentBtn">Set agent</button>
+            </div>
+            <div class="acard">
+              <h3>Pool cap</h3>
+              <div class="adesc">Maximum total assets the pool accepts. Currently 100 USDC on testnet.</div>
+              <div class="fld">
+                <div class="iwrap"><input id="capAmt" type="number" min="0" step="any" placeholder="cap in USDC" /><span class="suffix">USDC</span></div>
+              </div>
+              <button class="abtn" id="setCapBtn">Set cap</button>
+            </div>
+            <div class="acard">
+              <h3>Idle buffer</h3>
+              <div class="adesc">USDC the agent keeps undeployed so withdrawals settle instantly.</div>
+              <div class="fld">
+                <div class="iwrap"><input id="bufAmt" type="number" min="0" step="any" placeholder="buffer in USDC" /><span class="suffix">USDC</span></div>
+              </div>
+              <button class="abtn" id="setBufBtn">Set buffer</button>
+            </div>
+            <div class="acard">
+              <h3>KYC</h3>
+              <div class="adesc">Simulated for now. Open lets anyone deposit. Closed limits deposits to verified addresses.</div>
+              <div class="btnrow" style="margin-bottom:12px">
+                <button class="abtn ghost" id="kycToggleBtn">Close to verified only</button>
+              </div>
+              <div class="fld">
+                <div class="iwrap"><input id="veriAddr" placeholder="G… address to verify" spellcheck="false" /></div>
+              </div>
+              <div class="btnrow">
+                <button class="abtn" id="verifyBtn">Verify</button>
+                <button class="abtn danger" id="revokeBtn">Revoke</button>
+              </div>
+            </div>
+            <div class="acard">
+              <h3>Manual operations</h3>
+              <div class="adesc">Same powers the agent has: deploy idle USDC into the aggregator, or request a redemption. Agent key only.</div>
+              <div class="fld">
+                <div class="iwrap"><input id="opsAmt" type="number" min="0" step="any" placeholder="amount USDC" /><span class="suffix">USDC</span></div>
+              </div>
+              <div class="btnrow">
+                <button class="abtn" id="deployBtn">Deploy</button>
+                <button class="abtn ghost" id="opsRecallBtn">Request redemption</button>
+              </div>
+            </div>
+          </div>
+
+          <div style="display:flex;align-items:baseline;gap:10px;margin:24px 0 12px">
+            <h3 class="serif" style="font-size:17px;font-weight:400">Agent key</h3>
+            <span class="ptag">Balances &amp; gas top-up</span>
+          </div>
+          <div class="stat-grid">
+            <div class="stat"><div class="k">Agent key</div><div class="v" style="font-size:17px" id="cfgAgent">—</div><div class="s">on-chain agent()</div></div>
+            <div class="stat"><div class="k">Agent gas</div><div class="v" id="cfgGas">—</div><div class="s">XLM for fees</div></div>
+            <div class="stat"><div class="k">Agent USDC</div><div class="v" id="cfgUsdc">—</div><div class="s">wallet balance</div></div>
+            <div class="stat"><div class="k">Deposits</div><div class="v" id="cfgGate" style="font-size:17px">—</div><div class="s">pause blocks deposits only</div></div>
+            <div class="stat"><div class="k">Gas top-up</div><div class="v" style="font-size:15px"><button class="maxbtn" id="agentTopup">Send 5 XLM →</button></div><div class="s">admin pays, one click</div></div>
+          </div>
+
+          <div style="display:flex;align-items:baseline;gap:10px;margin:24px 0 12px">
+            <h3 class="serif" style="font-size:17px;font-weight:400">Runner configuration</h3>
+            <span class="ptag">Agent runner profile</span>
+            <div style="margin-left:auto"><button class="maxbtn" id="cfgSave">Save</button></div>
+          </div>
+          <div class="agrid">
+            <div class="fld">
+              <label>Tick interval <span class="hint">— seconds between runs</span></label>
+              <div class="iwrap"><input id="cfgTick" type="number" min="1" value="60" /><span class="suffix">sec</span></div>
+            </div>
+            <div class="fld">
+              <label>Minimum move <span class="hint">— smallest deploy or recall</span></label>
+              <div class="iwrap"><input id="cfgMinMove" type="number" min="0" value="1" /><span class="suffix">USDC</span></div>
+            </div>
+          </div>
+
+          <div style="display:flex;align-items:baseline;gap:10px;margin:6px 0 12px">
+            <h3 class="serif" style="font-size:15px;font-weight:400">Generated configuration</h3>
+            <span class="ptag">Paste into agent/.env</span>
+            <div style="margin-left:auto" class="btnrow">
+              <button class="maxbtn" id="cfgCopyEnv">Copy .env</button>
+              <button class="maxbtn" id="cfgCopyJson">Copy deployment</button>
+            </div>
+          </div>
+          <pre class="cfgpre" id="cfgEnv"></pre>
+          <pre class="cfgpre" id="cfgJson" style="margin-top:8px"></pre>
+        </div>
+      </section>
+
+      <!-- ══ ACTIVITY ══ -->
+      <section class="panel hidden" id="activity">
+        <div class="phead">
+          <h2>Activity</h2><span class="ptag">Vault events · newest first</span>
+          <div class="pright"><span class="pill live" id="feedPill"><span class="dot"></span><span id="feedCount">0</span>&nbsp;events</span></div>
+        </div>
+        <div class="pbody">
+          <div class="txlog" id="txlog"></div>
+          <div class="feed" id="feed" style="margin-top:10px;border-top:1px solid var(--hair);padding-top:6px"></div>
+        </div>
+      </section>
+
+      <!-- ══ TRANSACTIONS ══ -->
+      <section class="panel hidden" id="transactions">
+        <div class="phead">
+          <h2>Transactions</h2><span class="ptag">Vault transactions · recent ledgers</span>
+          <div class="pright"><span class="pill" id="txPill"><span class="dot"></span><span id="txCount">0</span>&nbsp;txs</span></div>
+        </div>
+        <div class="pbody" style="padding-top:6px">
+          <table>
+            <thead><tr><th>Hash</th><th>Ledger</th><th>Action</th><th>Actor</th><th>Amount</th><th style="width:34px"></th></tr></thead>
+            <tbody id="txBody"><tr><td colspan="6"><div class="empty">No transactions yet</div></td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+    </div>
   </div>
+</div>
 
-  <main class="grid">
-    <section class="card pool">
-      <h2>Pool</h2>
-      <div class="stat-row">
-        <div class="stat">
-          <span class="label">Total assets</span>
-          <span class="value"><span id="pool-total">–</span> USDC</span>
-        </div>
-        <div class="stat">
-          <span class="label">Cap</span>
-          <span class="value"><span id="pool-cap">–</span> USDC</span>
-        </div>
-      </div>
-      <div class="capbar"><div id="cap-fill"></div></div>
-      <div class="muted small" id="cap-pct">–</div>
+<div id="toasts"></div>
+<div id="tourBlock"></div>
+<div id="tourSpot"></div>
+<div id="tourTip"></div>
 
-      <div class="stat-row three">
-        <div class="stat">
-          <span class="label">Idle</span>
-          <span class="value"><span id="pool-idle">–</span></span>
-        </div>
-        <div class="stat">
-          <span class="label">Deployed</span>
-          <span class="value"><span id="pool-deployed">–</span></span>
-        </div>
-        <div class="stat">
-          <span class="label">Buffer</span>
-          <span class="value"><span id="pool-buffer">–</span></span>
-        </div>
-      </div>
-
-      <div class="badges">
-        <span id="kyc-badge" class="pill">KYC</span>
-        <span id="paused-badge" class="pill warn" hidden>Deposits paused</span>
-      </div>
-      <div class="small muted">Vault <code id="vault-id">–</code></div>
-      <div class="small muted">Test USDC issuer <code id="usdc-issuer">–</code></div>
-    </section>
-
-    <section class="card connect" id="connect-prompt">
-      <h2>Get started</h2>
-      <p class="muted">Connect a Stellar wallet (Freighter, xBull, Albedo, Lobstr, or WalletConnect) on testnet to deposit.</p>
-      <p class="small muted">You need test USDC in your wallet. Ask the operator to mint some, and add a USDC trustline first.</p>
-    </section>
-
-    <section class="card position" id="position-card" hidden>
-      <h2>Your position</h2>
-      <div class="stat-row">
-        <div class="stat">
-          <span class="label">Value</span>
-          <span class="value"><span id="position-value">0.00</span> USDC</span>
-        </div>
-        <div class="stat">
-          <span class="label">Shares</span>
-          <span class="value small" id="position-shares">0</span>
-        </div>
-        <div class="stat">
-          <span class="label">Wallet USDC</span>
-          <span class="value"><span id="wallet-usdc">–</span></span>
-        </div>
-      </div>
-
-      <form id="deposit-form" class="form">
-        <label for="deposit-amount">Deposit USDC</label>
-        <div class="input-row">
-          <input id="deposit-amount" type="number" min="0" step="0.01" placeholder="0.00" required />
-          <button type="button" class="btn ghost" data-fill="max">Max</button>
-        </div>
-        <div class="small muted">Room left in cap: <span id="deposit-remaining">–</span> USDC</div>
-        <button id="deposit-button" class="btn primary block" type="submit">Deposit</button>
-      </form>
-
-      <div class="form">
-        <label>Withdraw</label>
-        <div class="input-row pct">
-          <button class="btn ghost" data-withdraw-pct="25" disabled>25%</button>
-          <button class="btn ghost" data-withdraw-pct="50" disabled>50%</button>
-          <button class="btn ghost" data-withdraw-pct="100" disabled>All</button>
-        </div>
-        <div class="small muted">Paid from idle USDC. If idle is short, the withdrawal reverts. Retry after the agent refills the buffer.</div>
-      </div>
-    </section>
-
-    <section class="card activity-card">
-      <h2>Activity</h2>
-      <ul id="activity" class="activity"></ul>
-    </section>
-  </main>
-
-  <footer class="footer muted small">
-    Pooled vault: anyone can deposit up to the cap. Withdrawals are never paused. The agent moves USDC only into the aggregator and back.
-  </footer>
-
-  <script type="module" src="./dist/app.js"></script>
+<script type="module" src="./dist/app.js"></script>
 </body>
 </html>
