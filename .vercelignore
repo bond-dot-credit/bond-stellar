@@ -1,0 +1,5 @@
+contracts/target
+node_modules
+.git
+ui/dist
+ui/wallet.json

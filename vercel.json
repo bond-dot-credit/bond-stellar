@@ -1,0 +1,6 @@
+{
+  "framework": null,
+  "buildCommand": "npm run build:ui",
+  "outputDirectory": "ui",
+  "installCommand": "npm install"
+}

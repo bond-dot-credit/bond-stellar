@@ -5,3 +5,5 @@ ui/dist/
 .DS_Store
 *.log
 ui/wallet.json
+.vercel
+.env*
