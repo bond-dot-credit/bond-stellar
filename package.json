@@ -1,0 +1,26 @@
+{
+  "name": "bond-stellar",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pooled USDC vault on Stellar Soroban that deposits into an RWA aggregator",
+  "type": "module",
+  "scripts": {
+    "build:ui": "node scripts/build-ui.mjs",
+    "ui": "node scripts/serve-ui.mjs",
+    "agent": "node agent/agent.mjs",
+    "agent:once": "node agent/agent.mjs --once",
+    "test:contracts": "cd contracts && cargo test",
+    "deploy:testnet": "./scripts/deploy-testnet.sh",
+    "smoke:testnet": "node scripts/smoke-testnet.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@creit.tech/stellar-wallets-kit": "2.7.0",
+    "@stellar/stellar-sdk": "17.2.1"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.12"
+  }
+}

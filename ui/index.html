@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bond Stellar · Pooled Vault</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">◆</span>
+      <div>
+        <div class="title">Bond Stellar</div>
+        <div class="subtitle">Pooled USDC vault · RWA aggregator</div>
+      </div>
+    </div>
+    <div class="top-right">
+      <span id="network-badge" class="pill">testnet</span>
+      <button id="wallet-button" class="btn primary">Connect wallet</button>
+    </div>
+  </header>
+
+  <div class="banner">
+    Testnet demo. Mock aggregator, test USDC, and simulated KYC. No real funds.
+  </div>
+
+  <main class="grid">
+    <section class="card pool">
+      <h2>Pool</h2>
+      <div class="stat-row">
+        <div class="stat">
+          <span class="label">Total assets</span>
+          <span class="value"><span id="pool-total">–</span> USDC</span>
+        </div>
+        <div class="stat">
+          <span class="label">Cap</span>
+          <span class="value"><span id="pool-cap">–</span> USDC</span>
+        </div>
+      </div>
+      <div class="capbar"><div id="cap-fill"></div></div>
+      <div class="muted small" id="cap-pct">–</div>
+
+      <div class="stat-row three">
+        <div class="stat">
+          <span class="label">Idle</span>
+          <span class="value"><span id="pool-idle">–</span></span>
+        </div>
+        <div class="stat">
+          <span class="label">Deployed</span>
+          <span class="value"><span id="pool-deployed">–</span></span>
+        </div>
+        <div class="stat">
+          <span class="label">Buffer</span>
+          <span class="value"><span id="pool-buffer">–</span></span>
+        </div>
+      </div>
+
+      <div class="badges">
+        <span id="kyc-badge" class="pill">KYC</span>
+        <span id="paused-badge" class="pill warn" hidden>Deposits paused</span>
+      </div>
+      <div class="small muted">Vault <code id="vault-id">–</code></div>
+      <div class="small muted">Test USDC issuer <code id="usdc-issuer">–</code></div>
+    </section>
+
+    <section class="card connect" id="connect-prompt">
+      <h2>Get started</h2>
+      <p class="muted">Connect a Stellar wallet (Freighter, xBull, Albedo, Lobstr, or WalletConnect) on testnet to deposit.</p>
+      <p class="small muted">You need test USDC in your wallet. Ask the operator to mint some, and add a USDC trustline first.</p>
+    </section>
+
+    <section class="card position" id="position-card" hidden>
+      <h2>Your position</h2>
+      <div class="stat-row">
+        <div class="stat">
+          <span class="label">Value</span>
+          <span class="value"><span id="position-value">0.00</span> USDC</span>
+        </div>
+        <div class="stat">
+          <span class="label">Shares</span>
+          <span class="value small" id="position-shares">0</span>
+        </div>
+        <div class="stat">
+          <span class="label">Wallet USDC</span>
+          <span class="value"><span id="wallet-usdc">–</span></span>
+        </div>
+      </div>
+
+      <form id="deposit-form" class="form">
+        <label for="deposit-amount">Deposit USDC</label>
+        <div class="input-row">
+          <input id="deposit-amount" type="number" min="0" step="0.01" placeholder="0.00" required />
+          <button type="button" class="btn ghost" data-fill="max">Max</button>
+        </div>
+        <div class="small muted">Room left in cap: <span id="deposit-remaining">–</span> USDC</div>
+        <button id="deposit-button" class="btn primary block" type="submit">Deposit</button>
+      </form>
+
+      <div class="form">
+        <label>Withdraw</label>
+        <div class="input-row pct">
+          <button class="btn ghost" data-withdraw-pct="25" disabled>25%</button>
+          <button class="btn ghost" data-withdraw-pct="50" disabled>50%</button>
+          <button class="btn ghost" data-withdraw-pct="100" disabled>All</button>
+        </div>
+        <div class="small muted">Paid from idle USDC. If idle is short, the withdrawal reverts. Retry after the agent refills the buffer.</div>
+      </div>
+    </section>
+
+    <section class="card activity-card">
+      <h2>Activity</h2>
+      <ul id="activity" class="activity"></ul>
+    </section>
+  </main>
+
+  <footer class="footer muted small">
+    Pooled vault: anyone can deposit up to the cap. Withdrawals are never paused. The agent moves USDC only into the aggregator and back.
+  </footer>
+
+  <script type="module" src="./dist/app.js"></script>
+</body>
+</html>
