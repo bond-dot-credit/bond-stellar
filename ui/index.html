@@ -362,6 +362,18 @@
 
     <div class="content">
 
+      <section class="panel" aria-label="Demo information">
+        <div class="pbody">
+          <h2>Meridian · Stellar testnet demo</h2>
+          <p class="adesc">Balances, shares, and confirmed transactions are read from Stellar testnet. The USDC token is a faucet-funded test token. The RWA aggregator and its yield are simulated; no real RWA investment occurs.</p>
+          <p class="small muted">Connect a testnet wallet → fund XLM → get test USDC → deposit → watch keeper allocation → recall liquidity → withdraw.</p>
+          <p class="small" id="readStatus" role="status">Waiting for the first testnet read…</p>
+          <p class="small" id="riskStatus">Allocation protection: fixed USDC buffer. A 20% minimum buffer is proposed, not implemented.</p>
+          <p class="small" id="liquidityStatus">Liquidity status will appear after a successful read.</p>
+          <p class="small" id="transactionStatus" role="status" aria-live="polite">No transaction started this session.</p>
+        </div>
+      </section>
+
       <!-- ══ CONNECT ══ -->
       <section class="panel" id="connect">
         <div class="pbody conn">
@@ -417,7 +429,7 @@
 
             <div class="acard" id="withdrawCard">
               <h3>Withdraw</h3>
-              <div class="adesc">Burn your shares for USDC from the idle balance. Withdrawals are never paused. If idle is short, retry after the agent refills it.</div>
+              <div class="adesc">Burn your shares for USDC from the idle balance. Withdrawals are never paused. If idle is short, an agent must recall sufficient liquidity before you retry. A failed withdrawal does not queue a request.</div>
               <div class="fld">
                 <div class="iwrap">
                   <input id="wdAmt" type="number" min="0" step="any" placeholder="0.00" />

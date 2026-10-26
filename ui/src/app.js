@@ -105,10 +105,12 @@ function signerFor(address) {
     // The wallet may have switched accounts since connect. Never sign for an address the user isn't showing.
     const { address: current } = await StellarWalletsKit.getAddress();
     if (current !== address) throw new Error("Wallet account changed. Reconnect to continue.");
+    $("transactionStatus").textContent = "Awaiting wallet approval. Review the transaction in your wallet.";
     const { signedTxXdr } = await StellarWalletsKit.signTransaction(xdr, {
       networkPassphrase: config.networkPassphrase,
       address,
     });
+    $("transactionStatus").textContent = "Wallet signed. Submitting and waiting for testnet confirmation…";
     return signedTxXdr;
   };
 }
@@ -177,9 +179,11 @@ async function refresh() {
     }
     ledger = (await chain.server.getLatestLedger()).sequence;
     renderAll();
+    $("readStatus").textContent = `Live testnet read · ledger #${ledger} · ${new Date().toLocaleTimeString()}`;
     await Promise.all([loadEvents(), loadAgentStats()]);
   } catch (e) {
-    toast(`Could not read the vault: ${e.message}`, "err", 9000);
+    $("readStatus").textContent = "Testnet read failed. Displayed balances may be stale; refresh before transacting.";
+    toast("Could not read the vault. Check the RPC connection and refresh.", "err", 9000);
   }
 }
 
@@ -251,6 +255,13 @@ function renderAll() {
     ? `Your position: ${fmt(position.value)} USDC · ${position.shares.toLocaleString("en-US")} shares · idle ${fmt(pool.idle)} USDC`
     : "Connect a wallet to see your position";
 
+  $("riskStatus").textContent = `Contract allocation limit: keep ${fmt(pool.buffer)} USDC idle (fixed amount). The proposed 20% minimum is not implemented. Deposits capped at ${fmt(pool.cap)} USDC.`;
+  $("liquidityStatus").textContent = pending
+    ? `Recall: ${fmt(pending.amount)} USDC ${claimable() ? "ready for the agent to claim" : "settling until " + new Date(pending.unlock * 1000).toLocaleTimeString()}. Pending funds are not yet withdrawable.`
+    : `No recall pending. ${fmt(pool.idle)} USDC available for withdrawals. The keeper restores only the fixed buffer; larger exits need an agent recall.`;
+  $("exitSteps").textContent = !user ? "Connect to see exit liquidity." : position.value > pool.idle
+    ? `Full exit needs ${fmt(position.value - pool.idle)} USDC more idle liquidity. No withdrawal reservation exists yet; the keeper can redeploy recalled surplus.`
+    : "Your full position is covered by current idle liquidity. Balances may change before confirmation.";
   renderVenues(total);
 
   $("navAdmin").classList.toggle("disabled", role !== "owner");
@@ -275,7 +286,7 @@ function renderVenues(total) {
   const row = `
     <tr class="vrow" data-vdetail="${roles.aggregator}">
       <td>
-        <span class="vname">Soroban RWA aggregator</span>
+        <span class="vname">Mock RWA aggregator</span>
         <div class="mono muted" style="font-size:10px" title="${roles.aggregator}">${short(roles.aggregator)}</div>
       </td>
       <td><span class="pill ok"><span class="dot"></span>pinned</span></td>
@@ -293,7 +304,7 @@ function renderVenues(total) {
 function venueDetailHtml(total) {
   return `<div>
     <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">
-      <h3 style="font-size:20px">Soroban RWA aggregator</h3>
+      <h3 style="font-size:20px">Mock RWA aggregator</h3>
       <span class="pill ok"><span class="dot"></span>pinned</span>
       <div style="margin-left:auto"><button class="maxbtn" data-copyfull="${roles.aggregator}">copy address</button></div>
     </div>
@@ -397,15 +408,30 @@ async function run(label, action) {
   if (busy) return toast("Another transaction is in flight", "err");
   busy = true;
   gate();
+  $("transactionStatus").textContent = `${label}: preparing and simulating the transaction…`;
   const row = txlog(label, "pending", null);
   try {
     const { hash } = await action();
     row.querySelector(".thash").innerHTML = `<a href="${explorerTx(hash)}" target="_blank" rel="noopener">${short(hash)}</a>`;
     row.querySelector(".chip").className = "chip mined";
     row.querySelector(".chip").textContent = "mined";
+    $("transactionStatus").textContent = `${label}: confirmed on Stellar testnet. `;
+    const link = document.createElement("a");
+    link.href = explorerTx(hash);
+    link.target = "_blank";
+    link.rel = "noopener";
+    link.textContent = "View transaction ↗";
+    $("transactionStatus").appendChild(link);
     toast(`${label} — confirmed`);
   } catch (e) {
-    const msg = String(e.message ?? e).slice(0, 240);
+    const raw = String(e.message ?? e);
+    const code = raw.match(/Error\(Contract,\s*#(\d+)\)/)?.[1];
+    const reasons = { 5: "Deposits are paused.", 6: "This address is not verified.", 7: "The deposit would exceed the vault cap.", 9: "Insufficient idle liquidity. Ask the agent to recall funds, then retry; no withdrawal was queued.", 10: "Allocation rejected: it would breach the fixed USDC buffer." };
+    const msg = /reject|denied|cancel/i.test(raw) && !code
+      ? "The request was rejected or cancelled."
+      : label !== "Get test USDC" && code && reasons[code] ? reasons[code]
+      : "The request did not complete. Check your wallet and testnet connection before retrying.";
+    $("transactionStatus").textContent = `${label}: ${msg} Confirmation was not received; check the wallet or explorer before retrying. Simulation rejection may occur before broadcast.`;
     row.querySelector(".chip").className = "chip failed";
     row.querySelector(".chip").textContent = "failed";
     toast(`${label} failed — ${msg}`, "err", 12000);
