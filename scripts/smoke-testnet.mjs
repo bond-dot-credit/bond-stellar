@@ -24,19 +24,44 @@ const show = (label, s) =>
 console.log("== before");
 show("vault", await vault.state(chain));
 
-console.log("== alice deposits 30 USDC");
-await vault.deposit(chain, { user: aliceAddress, amount: toBaseUnits("30"), signTx: keypairSigner(aliceSecret, config.networkPassphrase) });
+// The pool may already hold deposits from earlier runs, so the test fits its
+// amounts under the current cap room and idle buffer instead of assuming an empty pool.
+const before = await vault.state(chain);
+const room = before.cap - before.totalAssets;
+const deposit = room < toBaseUnits("30") ? room : toBaseUnits("30");
+if (deposit <= 0n) {
+  console.log("pool is at cap — nothing to deposit");
+  process.exit(0);
+}
+console.log(`== alice deposits ${formatUsdc(deposit)} USDC`);
+await vault.deposit(chain, { user: aliceAddress, amount: deposit, signTx: keypairSigner(aliceSecret, config.networkPassphrase) });
 show("vault", await vault.state(chain));
 const afterDeposit = await vault.position(chain, aliceAddress);
 console.log(`alice shares=${afterDeposit.shares} value=${formatUsdc(afterDeposit.value)} USDC`);
 
-console.log("== agent deploys 15 USDC into aggregator");
-await vault.agentDeploy(chain, { agent: config.agent, amount: toBaseUnits("15"), signTx: keypairSigner(agentSecret, config.networkPassphrase) });
-show("vault", await vault.state(chain));
-console.log(`deployed in aggregator: ${formatUsdc(await vault.deployed(chain))} USDC`);
+const deployable = (await vault.state(chain)).idle - before.buffer;
+if (deployable > 0n) {
+  const deploy = deployable < toBaseUnits("15") ? deployable : toBaseUnits("15");
+  console.log(`== agent deploys ${formatUsdc(deploy)} USDC into aggregator`);
+  await vault.agentDeploy(chain, { agent: config.agent, amount: deploy, signTx: keypairSigner(agentSecret, config.networkPassphrase) });
+  show("vault", await vault.state(chain));
+  console.log(`deployed in aggregator: ${formatUsdc(await vault.deployed(chain))} USDC`);
+} else {
+  console.log("== agent deploy skipped: idle is at or below the buffer");
+}
 
-console.log("== alice withdraws half her shares");
-await vault.withdraw(chain, { user: aliceAddress, shares: afterDeposit.shares / 2n, signTx: keypairSigner(aliceSecret, config.networkPassphrase) });
-show("vault", await vault.state(chain));
+console.log("== alice withdraws half her shares, or what idle covers");
 const left = await vault.position(chain, aliceAddress);
-console.log(`alice shares=${left.shares} value=${formatUsdc(left.value)} USDC`);
+const st = await vault.state(chain);
+// withdraw returns shares*(assets+1)/(supply+1e6); this bound keeps that amount within idle.
+const idleBound = st.totalAssets > 0n ? (st.idle * (st.totalSupply + 1_000_000n)) / (st.totalAssets + 1n) : 0n;
+const half = left.shares / 2n;
+const burn = [half, left.shares, idleBound].reduce((a, b) => (b < a ? b : a));
+if (burn <= 0n) {
+  console.log("idle is empty — nothing to withdraw");
+} else {
+  await vault.withdraw(chain, { user: aliceAddress, shares: burn, signTx: keypairSigner(aliceSecret, config.networkPassphrase) });
+  show("vault", await vault.state(chain));
+}
+const final = await vault.position(chain, aliceAddress);
+console.log(`alice shares=${final.shares} value=${formatUsdc(final.value)} USDC`);
