@@ -66,11 +66,60 @@ export async function view(chain, contractId, method, args = [], source = chain.
   return scValToNative(sim.result.retval);
 }
 
+/** Turns a submission rejection into a message a user can act on. */
+function describeRejection(errorResult) {
+  const raw = errorResult ? errorResult.toXDR("base64") : "no result";
+  const code = errorResult?.result?.type ?? null;
+  if (!code) return `rejected (${raw})`;
+  const hints = {
+    txBadAuth:
+      "bad auth — the wallet signed with the wrong account or network. In Freighter, set the network to Testnet, make sure the same account you connected with is active, then reconnect and retry",
+    txNoAccount: "the account does not exist on this network — fund it with testnet XLM first (see the link under Deposit)",
+    txInsufficientBalance: "not enough XLM for fees — fund the account with testnet XLM first",
+    txBadSeq: "stale sequence number — refresh the page and retry",
+    txInsufficientFee: "network fee too low — retry",
+  };
+  return hints[code] ? `${code}: ${hints[code]}` : `${code} (${raw})`;
+}
+
+// Contract error names, keyed by the code in each contract's #[contracterror] enum.
+const VAULT_ERRORS = {
+  1: "AlreadyInitialized", 2: "NotInitialized", 3: "ZeroAmount", 4: "ZeroShares", 5: "Paused",
+  6: "NotVerified", 7: "CapExceeded", 8: "InsufficientShares", 9: "InsufficientIdle", 10: "BufferBreached",
+};
+const TOKEN_ERRORS = {
+  1: "AlreadyInitialized", 2: "NotInitialized", 3: "InvalidAmount", 4: "InsufficientBalance", 5: "FaucetLimit",
+};
+
+const SIM_ERROR_HINTS = {
+  Paused: "deposits are paused right now",
+  NotVerified: "this address is not verified and the pool is closed to verified accounts only",
+  CapExceeded: "the amount doesn't fit under the pool cap — deposit less",
+  InsufficientShares: "you don't hold that many shares",
+  InsufficientIdle: "the vault doesn't hold enough idle USDC — withdraw less or wait for the agent to recall funds",
+  BufferBreached: "the agent can't move that much without breaching the idle buffer",
+  ZeroAmount: "the amount must be above zero",
+  ZeroShares: "the amount is too small to mint any shares",
+  InsufficientBalance: "the wallet doesn't hold enough USDC",
+  FaucetLimit: "the faucet gives at most 1,000 USDC per call",
+  InvalidAmount: "the amount is invalid",
+};
+
+/** Translates `HostError: Error(Contract, #n)` from simulation using that contract's error table. */
+function decodeSimError(message, table) {
+  const match = /Error\(Contract, #(\d+)\)/.exec(message ?? "");
+  if (!match) return message;
+  const name = table[match[1]];
+  if (!name) return message;
+  const hint = SIM_ERROR_HINTS[name];
+  return hint ? `${name}: ${hint}` : name;
+}
+
 /** Submits a signed transaction and polls until it settles. Returns the hash and return value. */
 async function submitAndWait(chain, signed, label) {
   const sent = await chain.server.sendTransaction(signed);
   if (sent.status === "ERROR") {
-    throw new Error(`${label} rejected: ${sent.errorResult ? sent.errorResult.toXDR("base64") : sent.status}`);
+    throw new Error(`${label} ${describeRejection(sent.errorResult)}`);
   }
   for (let i = 0; i < POLL_ATTEMPTS; i++) {
     await sleep(POLL_INTERVAL_MS);
@@ -87,13 +136,18 @@ async function submitAndWait(chain, signed, label) {
  * State-changing Soroban call. `source` is the signing account (depositor, agent, or admin).
  * `signTx(xdr) -> signedXdr` is the wallet or keypair signer.
  */
-export async function send(chain, { source, contractId, method, args = [], signTx }) {
+export async function send(chain, { source, contractId, method, args = [], signTx, errors }) {
   const account = await chain.server.getAccount(source);
   const built = new TransactionBuilder(account, { fee: BASE_FEE, networkPassphrase: chain.passphrase })
     .addOperation(new Contract(contractId).call(method, ...args))
     .setTimeout(120)
     .build();
-  const prepared = await chain.server.prepareTransaction(built);
+  let prepared;
+  try {
+    prepared = await chain.server.prepareTransaction(built);
+  } catch (err) {
+    throw new Error(decodeSimError(err.message, errors));
+  }
   const signed = TransactionBuilder.fromXDR(await signTx(prepared.toXDR()), chain.passphrase);
   return submitAndWait(chain, signed, method);
 }
@@ -143,7 +197,7 @@ const EVENT_LABELS = {
 };
 
 const vaultCall = (chain, source, method, args, signTx) =>
-  send(chain, { source, contractId: chain.config.vault, method, args, signTx });
+  send(chain, { source, contractId: chain.config.vault, method, args, signTx, errors: VAULT_ERRORS });
 
 export const vault = {
   /** Contract roles and configuration. Addresses are strings. */
@@ -256,7 +310,7 @@ export const vault = {
 
   /** Testnet faucet on the test USDC token. Up to 1,000 USDC per call. */
   faucet: (chain, { user, amount, signTx }) =>
-    send(chain, { source: user, contractId: chain.config.usdc, method: "faucet", args: [addr(user), i128(amount)], signTx }),
+    send(chain, { source: user, contractId: chain.config.usdc, method: "faucet", args: [addr(user), i128(amount)], signTx, errors: TOKEN_ERRORS }),
 
   /** Owner-only setters. `method` is one of the vault's admin functions. */
   admin: (chain, { admin, method, args = [], signTx }) => vaultCall(chain, admin, method, args, signTx),
