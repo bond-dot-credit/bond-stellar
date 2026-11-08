@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "Bond Demo Wallet (mock Freighter)",
+  "version": "0.1.0",
+  "description": "Demo-only mock of the Freighter API for recording the pool console. Testnet identities only. Never use for real funds.",
+  "content_scripts": [
+    {
+      "matches": ["http://localhost:8080/*"],
+      "js": ["build/inject.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    }
+  ]
+}

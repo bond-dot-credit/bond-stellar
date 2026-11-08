@@ -7,3 +7,6 @@ ui/dist/
 ui/wallet.json
 .vercel
 .env*
+
+# demo wallet build output (contains testnet secrets)
+demo/mock-wallet/build/
