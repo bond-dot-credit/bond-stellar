@@ -102,9 +102,16 @@ function setupWallet() {
 
 function signerFor(address) {
   return async (xdr) => {
-    // The wallet may have switched accounts since connect. Never sign for an address the user isn't showing.
-    const { address: current } = await StellarWalletsKit.getAddress();
+    // The wallet may have switched accounts or networks since connect. Never sign
+    // for an address or network the user isn't showing — it would surface as txBadAuth.
+    // fetchAddress asks the wallet itself; getAddress would only reread the kit's memory.
+    const [{ address: current }, { networkPassphrase }] = await Promise.all([
+      StellarWalletsKit.fetchAddress(),
+      StellarWalletsKit.getNetwork(),
+    ]);
     if (current !== address) throw new Error("Wallet account changed. Reconnect to continue.");
+    if (networkPassphrase !== config.networkPassphrase)
+      throw new Error(`Wallet switched networks. Switch it to ${config.network} and reconnect, then retry.`);
     const { signedTxXdr } = await StellarWalletsKit.signTransaction(xdr, {
       networkPassphrase: config.networkPassphrase,
       address,
@@ -651,7 +658,16 @@ function bind() {
     return vault.faucet(chain, { user, amount: toBaseUnits("100"), signTx: signerFor(user) });
   });
   $("rpcUrl").onchange = () => { config.rpcUrl = $("rpcUrl").value.trim(); chain = createChain(config); saveConn(); refresh(); };
-  $("vaultAddr").onchange = () => { config.vault = $("vaultAddr").value.trim(); saveConn(); refresh(); };
+  $("vaultAddr").onchange = () => {
+    const id = $("vaultAddr").value.trim();
+    if (!/^C[A-Z2-7]{55}$/.test(id)) {
+      $("vaultAddr").value = config.vault;
+      toast("That isn't a Soroban contract ID (a 56-character address starting with C). The deployed vault address was restored.", "err", 9000);
+      return;
+    }
+    config.vault = id;
+    refresh();
+  };
   $("refreshBtn").onclick = () => refresh();
 
   document.querySelectorAll("[data-q]").forEach((b) => (b.onclick = () => {
@@ -788,6 +804,20 @@ async function boot() {
   bind();
   const requested = new URLSearchParams(location.search).get("view");
   show(views.includes(requested) ? requested : "dashboard");
+  // The kit keeps the selected wallet in localStorage. If it is still reachable
+  // (extension unlocked, WalletConnect session alive) and on the right network, resume it.
+  // Await these sequentially: a sync throw from the second leaves the first promise orphaned.
+  try {
+    const { address } = await StellarWalletsKit.fetchAddress();
+    const { networkPassphrase } = await StellarWalletsKit.getNetwork();
+    if (networkPassphrase !== config.networkPassphrase) {
+      StellarWalletsKit.disconnect().catch(() => {});
+    } else {
+      user = address;
+      $("walletBtn").textContent = `${short(address)} · disconnect`;
+      toast(`Wallet restored · ${short(address)}`, "info", 4000);
+    }
+  } catch { /* no live wallet session — the user connects manually */ }
   await refresh();
   setInterval(refresh, 15_000);
 }
