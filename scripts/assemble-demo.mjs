@@ -15,8 +15,6 @@ import ffmpegPath from "ffmpeg-static";
 const FFMPEG = ffmpegPath;
 const DIR = "/tmp/bond-demo-scenes";
 const FONT = "/System/Library/Fonts/Supplemental/Arial.ttf";
-const WIDTH = 1280;
-const HEIGHT = 720;
 
 // Storyboard slots and captions (merged user storyboard, <2:00 total).
 const SCENES = [
@@ -41,6 +39,20 @@ function sh(...args) {
 }
 
 const run = (cmd, args) => execFileSync(cmd, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+
+// Native resolution of the retina capture; crop to 16:9 without downscaling.
+function videoSize(file) {
+  const info = run(FFMPEG, ["-i", file]);
+  const m = info.match(/(\d{3,4})x(\d{3,4})/) ?? [0, "2704", "1756"];
+  const w = Math.floor(Number(m[1]) / 2) * 2;
+  const h = Math.floor((w * 9) / 16 / 2) * 2;
+  return { w, h };
+}
+const SIZE = videoSize(`${DIR}/session.mov`);
+const WIDTH = SIZE.w;
+const HEIGHT = SIZE.h;
+const S = WIDTH / 1280; // caption scale vs the 720p design
+console.log(`output ${WIDTH}x${HEIGHT} (16:9 crop of the retina capture)`);
 
 // --- narrations ---
 const narrDir = `${DIR}/narr`;
@@ -111,10 +123,10 @@ SCENES.forEach((s, i) => {
     "-y", "-ss", ((startMs - recordStart) / 1000).toFixed(2), "-i", session,
     "-t", (durMs / 1000).toFixed(2),
     "-vf",
-    `scale=${WIDTH}:-2,crop=${WIDTH}:${HEIGHT}:(iw-${WIDTH})/2:(ih-${HEIGHT})/2,` +
+    `crop=${WIDTH}:${HEIGHT}:(iw-${WIDTH})/2:(ih-${HEIGHT})/2,` +
     `tpad=stop_mode=clone:stop=${Math.ceil(pad * 25)},setpts=PTS-STARTPTS,` +
-    `drawtext=fontfile='${FONT}':text='${caption}':fontcolor=white:fontsize=26:box=1:boxcolor=black@0.55:boxborderw=18:x=(w-text_w)/2:y=h-text_h-48:line_spacing=8`,
-    "-c:v", "libx264", "-preset", "fast", "-crf", "23", "-pix_fmt", "yuv420p",
+    `drawtext=fontfile='${FONT}':text='${caption}':fontcolor=white:fontsize=${Math.round(26 * S)}:box=1:boxcolor=black@0.55:boxborderw=${Math.round(18 * S)}:x=(w-text_w)/2:y=h-text_h-${Math.round(48 * S)}:line_spacing=${Math.round(8 * S)}`,
+    "-c:v", "libx264", "-preset", "fast", "-crf", "19", "-pix_fmt", "yuv420p",
     "-an", "-r", "30", out,
   );
   sceneFiles.push({ file: out, start: cursor, slot: s.slot, narr: narrFiles[i] });

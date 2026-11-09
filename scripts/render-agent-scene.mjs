@@ -8,6 +8,8 @@ import ffmpegPath from "ffmpeg-static";
 const FONT = "/System/Library/Fonts/Supplemental/Andale Mono.ttf";
 const OUT = "/tmp/bond-demo-scenes/scene-04-agent.mp4";
 const DUR = 22;
+const W = 2704, H = 1520; // native 16:9 crop of the retina capture
+const K = W / 1280; // geometry scale vs the 720p design
 
 // [text, reveal time (s), color]
 const LINES = [
@@ -28,17 +30,17 @@ const LINES = [
 const CAPTION = "The keeper agent puts idle USDC above the buffer to work. 10 USDC stays idle so withdrawals stay instant.";
 const esc = (t) => t.replace(/\\/g, "\\\\").replace(/:/g, "\\:").replace(/'/g, "\\'").replace(/,/g, "\\,");
 const captionFilter =
-  `drawtext=fontfile='/System/Library/Fonts/Supplemental/Arial.ttf':text='${esc(CAPTION)}':fontsize=26:fontcolor=white:box=1:boxcolor=black@0.55:boxborderw=18:x=(w-text_w)/2:y=h-text_h-48:line_spacing=8:enable='between(t,0,${DUR})'`;
+  `drawtext=fontfile='/System/Library/Fonts/Supplemental/Arial.ttf':text='${esc(CAPTION)}':fontsize=${Math.round(26 * K)}:fontcolor=white:box=1:boxcolor=black@0.55:boxborderw=${Math.round(18 * K)}:x=(w-text_w)/2:y=h-text_h-${Math.round(48 * K)}:line_spacing=${Math.round(8 * K)}:enable='between(t,0,${DUR})'`;
 const vf = LINES.map(([text, at, color], i) => {
-  const y = 90 + i * 44;
-  return `drawtext=fontfile='${FONT}':text='${esc(text)}':fontsize=25:fontcolor='${color}':x=90:y=${y}:enable='between(t,${at},${DUR})'`;
+  const y = Math.round(90 * K) + i * Math.round(44 * K);
+  return `drawtext=fontfile='${FONT}':text='${esc(text)}':fontsize=${Math.round(25 * K)}:fontcolor='${color}':x=${Math.round(90 * K)}:y=${y}:enable='between(t,${at},${DUR})'`;
 }).join(",") + "," + captionFilter;
 
 execFileSync(
   ffmpegPath,
   [
     "-y",
-    "-f", "lavfi", "-i", `color=c=0x23232e:s=1280x720:d=${DUR}:r=30`,
+    "-f", "lavfi", "-i", `color=c=0x23232e:s=${W}x${H}:d=${DUR}:r=30`,
     "-vf", vf,
     "-c:v", "libx264", "-preset", "fast", "-crf", "21", "-pix_fmt", "yuv420p",
     "-an", OUT,
