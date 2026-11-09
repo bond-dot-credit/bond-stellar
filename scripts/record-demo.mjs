@@ -65,9 +65,24 @@ const osascript = (...args) => {
   }
 };
 
-/** Move the visible cursor over the element (for the recording), then click it
- *  synthetically: the console binds onclick handlers directly, so synthetic clicks
- *  always fire, and they can't be eaten by a transient toast/overlay. */
+/** Expanding ring at the click point, visible in the recording. */
+const ripple = (page, x, y) =>
+  page.evaluate(({ x, y }) => {
+    const d = document.createElement("div");
+    d.style.cssText =
+      `position:fixed;left:${x}px;top:${y}px;width:10px;height:10px;margin:-5px;` +
+      "border:3px solid #3fb27f;border-radius:50%;pointer-events:none;z-index:2147483646;" +
+      "transition:all .55s ease-out;opacity:.95";
+    document.body.appendChild(d);
+    requestAnimationFrame(() => {
+      d.style.width = "72px";
+      d.style.height = "72px";
+      d.style.margin = "-36px";
+      d.style.opacity = "0";
+    });
+    setTimeout(() => d.remove(), 650);
+  }, { x, y });
+
 /** Move the visible cursor over the element (for the recording), then click it
  *  synthetically. Every step re-queries the selector, because the console re-renders
  *  table rows on each 15s auto-refresh and a stale handle dies mid-click. */
@@ -90,14 +105,13 @@ async function click(page, sel, timeout = 9000) {
   if (!point) throw new Error(`not clickable: ${sel}`);
   await page.mouse.move(point.x, point.y, { steps: 14 });
   await S(400);
+  await ripple(page, point.x, point.y);
   await page.evaluate((s) => document.querySelector(s)?.click(), sel);
   await S(300);
 }
 
-/** Real mouse click (down/up at the element). Needed where a user activation is
- *  required, e.g. target=_blank links opening a new tab. */
 /** Real mouse click (down/up). Needed where a user activation is required, e.g.
- *  target=_blank links opening a new tab. Re-queries the selector like click(). */
+ *  target=_blank links and the demo wallet's Approve button. */
 async function clickReal(page, sel, timeout = 9000) {
   const deadline = Date.now() + timeout;
   let point = null;
@@ -117,6 +131,7 @@ async function clickReal(page, sel, timeout = 9000) {
   if (!point) throw new Error(`not clickable: ${sel}`);
   await page.mouse.move(point.x, point.y, { steps: 14 });
   await S(400);
+  await ripple(page, point.x, point.y);
   await page.mouse.down();
   await S(90);
   await page.mouse.up();
@@ -167,6 +182,7 @@ async function clickWalletInModal(page, name) {
   if (!box) throw new Error(`wallet entry not found in modal: ${name}`);
   await page.mouse.move(box.x, box.y, { steps: 12 });
   await S(400);
+  await ripple(page, box.x, box.y);
   await page.mouse.down();
   await S(100);
   await page.mouse.up();
@@ -240,6 +256,12 @@ async function sceneDeposit(page) {
   await S(700);
   await click(page, "#depBtn");
   mark("deposit", "submitted");
+  // the demo wallet asks for approval; let the dialog sit a moment, then approve
+  await page.waitForSelector("#demo-wallet-approve", { visible: true, timeout: 30000 });
+  mark("deposit", "sign-shown");
+  await S(1200);
+  await clickReal(page, "#demo-wallet-approve");
+  mark("deposit", "approved");
   await page.waitForSelector("#txlog .chip.pending", { timeout: 10000 }).catch(() => {});
   const href = await waitMined(page, "deposit");
   writeFileSync(`${SCENES_DIR}/deposit-tx.url`, href ?? "");
@@ -349,6 +371,11 @@ async function sceneWithdraw(page) {
   await S(700);
   await click(page, "#wdBtn");
   mark("withdraw", "submitted");
+  await page.waitForSelector("#demo-wallet-approve", { visible: true, timeout: 30000 });
+  mark("withdraw", "sign-shown");
+  await S(1200);
+  await clickReal(page, "#demo-wallet-approve");
+  mark("withdraw", "approved");
   await waitMined(page, "withdraw");
   await S(2000);
   await click(page, '[data-nav="transactions"]');
@@ -395,7 +422,7 @@ async function main() {
       "--no-default-browser-check",
       "--disable-session-crashed-bubble",
       "--hide-crash-restore-bubble",
-      ...(HEADED ? ["--start-fullscreen", `--app=${PAGE_URL}`] : []),
+      ...(HEADED ? [`--app=${PAGE_URL}`] : []),
     ],
   });
   const page = (await browser.pages())[0];
@@ -406,10 +433,20 @@ async function main() {
   await waitForData(page);
   log("DATA READY");
   if (HEADED) {
+    // --start-fullscreen only sometimes maximizes the app window; size it
+    // deterministically through CDP instead (no OS accessibility needed).
+    try {
+      const client = await page.createCDPSession();
+      const { windowId } = await client.send("Browser.getWindowForTarget");
+      await client.send("Browser.setWindowBounds", { windowId, bounds: { left: 0, top: 25, width: 1352, height: 853 } });
+      await S(1500);
+    } catch (e) {
+      log(`window resize failed: ${String(e.message).slice(0, 120)}`);
+    }
     // macOS fullscreen is unreachable from automation here (Chrome 156 ignores
-    // windowState, keystrokes need accessibility). --start-fullscreen instead
-    // maximizes the --app window to full display width below the menu bar; the
-    // assembly crops the recording to this rect so no menu bar or desktop shows.
+    // windowState, keystrokes need accessibility). The resized window covers the
+    // full display width below the menu bar; the assembly crops the recording to
+    // this rect so no menu bar or empty desktop ends up in the video.
     const rect = await page.evaluate(() => ({
       x: window.screenLeft, y: window.screenTop, w: window.innerWidth, h: window.innerHeight,
       sw: window.screen.width, sh: window.screen.height, dpr: window.devicePixelRatio,

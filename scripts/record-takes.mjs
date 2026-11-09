@@ -51,10 +51,10 @@ if (!HEADLESS) {
 
 let lastScene = null;
 for (const scene of SCENES) {
-  if (!HEADLESS && scene !== SCENES[0]) {
-    const ready = await until(new RegExp(`READY ${scene}`), 300_000);
-    if (!ready) { console.error(`driver never became READY for ${scene}`); break; }
-  }
+  // always wait for the driver's READY before creating the go file: the driver
+  // wipes stale go files at startup, so an early file would be deleted
+  const ready = await until(new RegExp(`READY ${scene}`), 300_000);
+  if (!ready) { console.error(`driver never became READY for ${scene}`); break; }
   writeFileSync(`${DIR}/go-${scene}`, "");
   const done = await until(new RegExp(`SCENE_(DONE|FAILED) ${scene}`), 300_000);
   console.log(`${scene}: ${done ? done[0] : "TIMEOUT"}`);

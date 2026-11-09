@@ -57,14 +57,12 @@ const rect = existsSync(`${DIR}/window-rect.json`)
   ? JSON.parse(readFileSync(`${DIR}/window-rect.json`, "utf8"))
   : { x: 0, y: 30, w: 1352, h: 848, sw: 1352 };
 const K = REC.w / rect.sw; // recording pixels per CSS point
-const CROP = {
-  x: Math.round(rect.x * K), y: Math.round(rect.y * K),
-  w: Math.round(rect.w * K / 2) * 2, h: Math.round(rect.h * K / 2) * 2,
-};
-const WIDTH = CROP.w;
-const HEIGHT = CROP.h;
-const S = WIDTH / 1280; // caption scale vs the 720p design
-console.log(`recording ${REC.w}x${REC.h} -> window crop ${WIDTH}x${HEIGHT} at (${CROP.x},${CROP.y})`);
+// Uniform output: every source is scaled to OUT_W and centered into OUT_H
+// (sources with a taller window get a center crop, shorter ones edge-pad).
+const OUT_W = 2560;
+const OUT_H = 1538;
+const S = OUT_W / 1280; // caption scale vs the 720p design
+console.log(`output ${OUT_W}x${OUT_H}; sources scaled to fit`);
 
 // --- narrations ---
 const narrDir = `${DIR}/narr`;
@@ -84,9 +82,13 @@ SCENES.forEach((s, i) => {
 // (scene-XX-<name>.mp4 already rendered, e.g. the terminal replay) or re-recorded
 // in a mini-session (SCENE_SOURCES).
 // Mini-session re-records that override a scene (each dir has session.mov,
-// markers.json, record-start). The agent scene ships as a prebuilt terminal
-// replay, so its dir is only a fallback.
-const ALT_DIRS = { agent: "/tmp/bond-demo-agent", admin: "/tmp/bond-demo-admin" };
+// markers.json, record-start, window-rect.json). The agent scene ships as a
+// prebuilt terminal replay, so it never needs a live source.
+const ALT_DIRS = {
+  connect: "/tmp/bond-demo-cd",
+  deposit: "/tmp/bond-demo-cd",
+  withdraw: "/tmp/bond-v8-backup",
+};
 const markersMain = JSON.parse(readFileSync(`${DIR}/markers.json`, "utf8"));
 const recordStartMain = Number(readFileSync(`${DIR}/record-start`, "utf8"));
 const sessionMain = `${DIR}/session.mov`;
@@ -112,6 +114,18 @@ SCENES.forEach((s, i) => {
     : markersMain;
   const evts = markers[s.name] ?? [];
   const at = (label) => evts.find((e) => e.label === label)?.at ?? recordStart;
+  // per-source crop: each recording run captures its own window rect
+  const rectPath = `${altDir ?? DIR}/window-rect.json`;
+  const srect = existsSync(rectPath)
+    ? JSON.parse(readFileSync(rectPath, "utf8"))
+    : { x: 0, y: 30, w: 1352, h: 769, sw: 1352 };
+  const k = videoSize(session).w / srect.sw;
+  const cx = Math.round(srect.x * k), cy = Math.round(srect.y * k);
+  const cw = Math.round(srect.w * k / 2) * 2, ch = Math.round(srect.h * k / 2) * 2;
+  const scaledH = Math.round((ch * OUT_W) / cw / 2) * 2;
+  const fit = scaledH >= OUT_H
+    ? `crop=${OUT_W}:${OUT_H}:0:${Math.round((scaledH - OUT_H) / 2)}`
+    : `pad=${OUT_W}:${OUT_H}:-1:-1:color=0x1a1d22`;
   let startMs, endMs;
   switch (s.name) {
     case "dashboard": startMs = evts[0].at - 200; endMs = at("scrolled") + 1500; break;
@@ -120,7 +134,7 @@ SCENES.forEach((s, i) => {
     case "explorer": startMs = at("loaded") - 8000; endMs = at("loaded") + 2500; break;
     case "agent": startMs = at("tick-done") - 16000; endMs = at("tick-done") + 1500; break;
     case "venues-activity": startMs = at("feed-shown") - 8500; endMs = at("feed-shown") + 2500; break;
-    case "withdraw": startMs = at("mined") - 14000; endMs = at("tx-expanded") + 1500; break;
+    case "withdraw": startMs = at("sign-shown") - 3000; endMs = at("tx-expanded") + 1500; break;
     case "admin": startMs = at("connected-as-owner") - 2000; endMs = at("page-scrolled") + 2500; break;
     default: startMs = evts[0]?.at ?? recordStart; endMs = startMs + s.slot * 1000;
   }
@@ -128,16 +142,20 @@ SCENES.forEach((s, i) => {
   let durMs = Math.max(1200, endMs - startMs);
   if (durMs / 1000 < s.slot - 1.5) durMs = s.slot * 1000; // stretch short takes; pad below
   const pad = Math.max(0, durMs / 1000 - s.slot);
-  const esc = (t) => t.replace(/\\/g, "\\\\").replace(/:/g, "\\:").replace(/'/g, "\\'").replace(/,/g, "\\,");
-  const caption = esc(s.caption);
+  // one-off repair: the v8 withdraw take shows the share count mislabeled as USDC
+  // ("withdraw(5000000.00 USDC)"); paint the decoded value over it while the
+  // signing popup is on screen
+  const patch = s.name === "withdraw"
+    ? `,drawbox=x=2100:y=303:w=420:h=50:color=white@1:t=fill:enable='between(t,2.8,5.5)'` +
+      `,drawtext=fontfile='${FONT}':text='withdraw(5.00 USDC)':fontsize=26:fontcolor=0x1c2a35:x=2490-text_w:y=315:enable='between(t,2.8,5.5)'`
+    : "";
   const out = `${DIR}/scene-${String(i).padStart(2, "0")}-${s.name}.mp4`;
   sh(
     "-y", "-ss", ((startMs - recordStart) / 1000).toFixed(2), "-i", session,
     "-t", (durMs / 1000).toFixed(2),
     "-vf",
-    `crop=${WIDTH}:${HEIGHT}:${CROP.x}:${CROP.y},` +
-    `tpad=stop_mode=clone:stop=${Math.ceil(pad * 25)},setpts=PTS-STARTPTS,` +
-    `drawtext=fontfile='${FONT}':text='${caption}':fontcolor=white:fontsize=${Math.round(26 * S)}:box=1:boxcolor=black@0.55:boxborderw=${Math.round(18 * S)}:x=(w-text_w)/2:y=h-text_h-${Math.round(48 * S)}:line_spacing=${Math.round(8 * S)}`,
+    `crop=${cw}:${ch}:${cx}:${cy},scale=${OUT_W}:-2,${fit},` +
+    `tpad=stop_mode=clone:stop=${Math.ceil(pad * 25)},setpts=PTS-STARTPTS` + patch,
     "-c:v", "libx264", "-preset", "fast", "-crf", "19", "-pix_fmt", "yuv420p",
     "-an", "-r", "30", out,
   );
@@ -164,7 +182,7 @@ sh(
   "-i", `${DIR}/video-only.mp4`,
   "-filter_complex", `${filters};${mix}`,
   "-map", `${sceneFiles.length}:v`, "-map", "[aout]",
-  "-c:v", "copy", "-c:a", "aac", "-b:a", "96k", "-shortest", OUT,
+  "-c:v", "copy", "-c:a", "aac", "-b:a", "96k", "-shortest", "-t", String(total), OUT,
 );
 
 console.log(`wrote ${OUT} (${(statSync(OUT).size / 1e6).toFixed(1)} MB, ${total}s)`);

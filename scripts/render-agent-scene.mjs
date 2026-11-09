@@ -6,27 +6,8 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import ffmpegPath from "ffmpeg-static";
 
-// Match the assembled scenes: the app window's crop of the retina capture.
-function outputSize() {
-  try {
-    let probe = "";
-    try {
-      execFileSync(ffmpegPath, ["-i", "/tmp/bond-demo-scenes/session.mov"], { stdio: ["ignore", "pipe", "pipe"] });
-    } catch (e) {
-      probe = e.stderr?.toString() ?? ""; // ffmpeg -i reports on stderr and exits 1
-    }
-    const m = probe.match(/(\d{3,4})x(\d{3,4})/);
-    const rect = JSON.parse(readFileSync("/tmp/bond-demo-scenes/window-rect.json", "utf8"));
-    const k = Number(m[1]) / rect.sw;
-    return {
-      w: Math.round(rect.w * k / 2) * 2,
-      h: Math.round(rect.h * k / 2) * 2,
-    };
-  } catch {
-    return { w: 2704, h: 1696 };
-  }
-}
-const { w: W, h: H } = outputSize();
+// Match the assembled scenes: the uniform output size of scripts/assemble-demo.mjs.
+const W = 2560, H = 1538;
 const K = W / 1280; // geometry scale vs the 720p design
 
 const FONT = "/System/Library/Fonts/Supplemental/Andale Mono.ttf";
@@ -49,14 +30,11 @@ const LINES = [
   ["$", 10.8, "#7ee787"],
 ];
 
-const CAPTION = "The keeper agent puts idle USDC above the buffer to work. 10 USDC stays idle so withdrawals stay instant.";
 const esc = (t) => t.replace(/\\/g, "\\\\").replace(/:/g, "\\:").replace(/'/g, "\\'").replace(/,/g, "\\,");
-const captionFilter =
-  `drawtext=fontfile='/System/Library/Fonts/Supplemental/Arial.ttf':text='${esc(CAPTION)}':fontsize=${Math.round(26 * K)}:fontcolor=white:box=1:boxcolor=black@0.55:boxborderw=${Math.round(18 * K)}:x=(w-text_w)/2:y=h-text_h-${Math.round(48 * K)}:line_spacing=${Math.round(8 * K)}:enable='between(t,0,${DUR})'`;
 const vf = LINES.map(([text, at, color], i) => {
   const y = Math.round(90 * K) + i * Math.round(44 * K);
   return `drawtext=fontfile='${FONT}':text='${esc(text)}':fontsize=${Math.round(25 * K)}:fontcolor='${color}':x=${Math.round(90 * K)}:y=${y}:enable='between(t,${at},${DUR})'`;
-}).join(",") + "," + captionFilter;
+}).join(",");
 
 execFileSync(
   ffmpegPath,
