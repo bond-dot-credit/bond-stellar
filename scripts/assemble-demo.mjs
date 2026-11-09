@@ -25,7 +25,7 @@ const SCENES = [
   { name: "deposit", slot: 22, caption: "Depositing 20 USDC. The wallet shows exactly what I'm signing. Confirmed - my position shows up." },
   { name: "explorer", slot: 10, caption: "Don't trust the UI - check the chain. The deposit, its call and events, on stellar.expert." },
   { name: "agent", slot: 22, caption: "The keeper agent puts idle USDC above the buffer to work. 10 USDC stays idle so withdrawals stay instant." },
-  { name: "venues-activity", slot: 10, caption: "The venue card and the on-chain event log show the same deploy." },
+  { name: "venues-activity", slot: 10, caption: "Every pool action is a vault event - deposits, deploys, withdrawals - logged here and on-chain." },
   { name: "withdraw", slot: 20, caption: "Withdrawing is just as direct. Shares burn, USDC comes back - logged here and on-chain." },
   { name: "admin", slot: 12, caption: "Owners get controls: pause deposits, set cap and buffer, rotate the agent. Withdrawals are never paused." },
   { name: "outro", slot: 3, caption: "Deposit, deploy, withdraw, verify. Testnet only." },
@@ -55,16 +55,37 @@ SCENES.forEach((s, i) => {
 });
 
 // --- per-scene processing ---
-// One continuous session recording; markers carry epoch timestamps (field "at")
-// aligned with record-start, written by record-takes.mjs.
-const markers = JSON.parse(readFileSync(`${DIR}/markers.json`, "utf8"));
-const recordStart = Number(readFileSync(`${DIR}/record-start`, "utf8"));
-const session = `${DIR}/session.mov`;
-if (!existsSync(session)) throw new Error(`missing session recording: ${session}`);
+// One continuous session recording per recording run; markers carry epoch timestamps
+// (field "at") aligned with that run's record-start. A scene may be prebuilt
+// (scene-XX-<name>.mp4 already rendered, e.g. the terminal replay) or re-recorded
+// in a mini-session (SCENE_SOURCES).
+// Mini-session re-records that override a scene (each dir has session.mov,
+// markers.json, record-start). The agent scene ships as a prebuilt terminal
+// replay, so its dir is only a fallback.
+const ALT_DIRS = { agent: "/tmp/bond-demo-agent", admin: "/tmp/bond-demo-admin" };
+const markersMain = JSON.parse(readFileSync(`${DIR}/markers.json`, "utf8"));
+const recordStartMain = Number(readFileSync(`${DIR}/record-start`, "utf8"));
+const sessionMain = `${DIR}/session.mov`;
+if (!existsSync(sessionMain)) throw new Error(`missing session recording: ${sessionMain}`);
 
+const PREBUILT = new Set();
 const sceneFiles = [];
 let cursor = 0;
 SCENES.forEach((s, i) => {
+  const prebuilt = `${DIR}/scene-${String(i).padStart(2, "0")}-${s.name}.mp4`;
+  if (existsSync(prebuilt)) {
+    // already rendered (terminal replay); use as-is
+    PREBUILT.add(s.name);
+    sceneFiles.push({ file: prebuilt, start: cursor, slot: s.slot, narr: narrFiles[i] });
+    cursor += s.slot;
+    return;
+  }
+  const altDir = ALT_DIRS[s.name] && existsSync(`${ALT_DIRS[s.name]}/session.mov`) ? ALT_DIRS[s.name] : null;
+  const session = altDir ? `${altDir}/session.mov` : sessionMain;
+  const recordStart = altDir ? Number(readFileSync(`${altDir}/record-start`, "utf8")) : recordStartMain;
+  const markers = altDir
+    ? { ...markersMain, ...JSON.parse(readFileSync(`${altDir}/markers.json`, "utf8")) }
+    : markersMain;
   const evts = markers[s.name] ?? [];
   const at = (label) => evts.find((e) => e.label === label)?.at ?? recordStart;
   let startMs, endMs;
@@ -72,10 +93,10 @@ SCENES.forEach((s, i) => {
     case "dashboard": startMs = evts[0].at - 200; endMs = at("scrolled") + 1500; break;
     case "connect": startMs = at("connected") - 6500; endMs = at("connected") + 3500; break;
     case "deposit": startMs = at("amount-typed") - 1500; endMs = at("mined") + 4500; break;
-    case "explorer": startMs = at("opening") - 700; endMs = at("loaded") + 2500; break;
-    case "agent": startMs = at("terminal-shown") - 1500; endMs = at("tick-done") + 1500; break;
-    case "venues-activity": startMs = at("detail-open") - 7000; endMs = at("feed-shown") + 2500; break;
-    case "withdraw": startMs = at("amount-typed") - 1500; endMs = at("tx-expanded") + 1500; break;
+    case "explorer": startMs = at("loaded") - 8000; endMs = at("loaded") + 2500; break;
+    case "agent": startMs = at("tick-done") - 16000; endMs = at("tick-done") + 1500; break;
+    case "venues-activity": startMs = at("feed-shown") - 8500; endMs = at("feed-shown") + 2500; break;
+    case "withdraw": startMs = at("mined") - 14000; endMs = at("tx-expanded") + 1500; break;
     case "admin": startMs = at("connected-as-owner") - 5000; endMs = at("page-scrolled") + 2500; break;
     default: startMs = evts[0]?.at ?? recordStart; endMs = startMs + s.slot * 1000;
   }

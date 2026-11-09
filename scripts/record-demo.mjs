@@ -19,7 +19,7 @@ const CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const PAGE_URL = process.env.DEMO_URL ?? "http://localhost:8080";
 const PROFILE = "/tmp/bond-demo-profile";
 const WALLET_BUNDLE = new URL("../demo/mock-wallet/build/inject.js", import.meta.url).pathname;
-const SCENES_DIR = "/tmp/bond-demo-scenes";
+const SCENES_DIR = process.env.SCENES_DIR ?? "/tmp/bond-demo-scenes";
 const HEADED = !process.argv.includes("--rehearse");
 
 const t0 = Date.now();
@@ -275,16 +275,26 @@ async function sceneExplorer(browser, page) {
 
 async function sceneAgent(headed, chromePid) {
   const agentSecret = execFileSync("stellar", ["keys", "secret", "stellar-agent"], { encoding: "utf8" }).trim();
-  const dir = "/tmp/bond-demo-scenes";
+  const dir = SCENES_DIR;
   const logFile = `${dir}/agent-tick.log`;
   rmSync(logFile, { force: true });
   if (headed) {
     const cmd = `cd '${process.cwd()}' && rm -f ${logFile} && AGENT_SECRET='${agentSecret}' npm run agent:once 2>&1 | tee ${logFile} ; echo TICK_DONE >> ${logFile}`;
-    osascript(
-      'tell application "Terminal" to activate',
-      `tell application "Terminal" to do script "${cmd.replace(/"/g, '\\"')}"`,
-      'tell application "Terminal" to set bounds of front window to {40, 40, 1320, 860}',
+    const escaped = cmd.replace(/"/g, '\\"');
+    // new tab (selected), window sized, then fullscreen so menu bar and dock stay hidden.
+    // One script block: AppleScript locals don't persist across separate -e invocations.
+    const ok = osascript(
+      `tell application "Terminal"
+        activate
+        set t to do script "${escaped}"
+        set selected of t to true
+        set bounds of front window to {40, 40, 1320, 860}
+        activate
+      end tell
+      tell application "System Events" to keystroke "f" using {control down, command down}`,
     );
+    if (!ok) log("WARN: Terminal automation failed (permissions?)");
+    await S(1800); // fullscreen animation
     mark("agent", "terminal-shown");
   } else {
     // headless rehearsal: run the tick directly, no Terminal window
@@ -374,6 +384,8 @@ async function main() {
   const browser = await puppeteer.launch({
     executablePath: CHROME,
     headless: HEADED ? false : "new",
+    // without --enable-automation Chrome shows no "controlled by test software" infobar
+    ignoreDefaultArgs: ["--enable-automation"],
     args: [
       `--user-data-dir=${PROFILE}`,
       "--no-first-run",
@@ -403,6 +415,9 @@ async function main() {
     ["admin", (b, p) => sceneAdmin(p)],
     ["outro", (b, p) => sceneOutro(p)],
   ];
+  const onlyIdx = process.argv.indexOf("--scenes");
+  const wanted = onlyIdx > -1 ? process.argv[onlyIdx + 1].split(",") : null;
+  const runScenes = wanted ? scenes.filter(([n]) => wanted.includes(n)) : scenes;
 
   const ensurePage = async () => {
     try {
@@ -417,7 +432,7 @@ async function main() {
     }
   };
 
-  for (const [name, fn] of scenes) {
+  for (const [name, fn] of runScenes) {
     await waitGo(name);
     try {
       await fn(browser, await ensurePage());

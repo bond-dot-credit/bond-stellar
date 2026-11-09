@@ -11,17 +11,19 @@
 import { spawn, execFileSync } from "node:child_process";
 import { createWriteStream, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 
-const DIR = "/tmp/bond-demo-scenes";
+const DIR = process.env.SCENES_DIR ?? "/tmp/bond-demo-scenes";
 const HEADLESS = process.argv.includes("--rehearse");
-const RECORD_SECONDS = 540; // 9 min window; the driver usually finishes in ~6
-
-const SCENES = ["dashboard", "connect", "deposit", "explorer", "agent", "venues-activity", "withdraw", "admin", "outro"];
+const RECORD_SECONDS = Number(process.env.RECORD_SECONDS ?? 540); // window; driver usually finishes in ~6 min
+const scenesIdx = process.argv.indexOf("--scenes");
+const SCENES = scenesIdx > -1
+  ? process.argv[scenesIdx + 1].split(",")
+  : ["dashboard", "connect", "deposit", "explorer", "agent", "venues-activity", "withdraw", "admin", "outro"];
 
 mkdirSync(DIR, { recursive: true });
 rmSync(`${DIR}/session.mov`, { force: true });
 
 const logStream = createWriteStream(`${DIR}/takes.log`);
-const driver = spawn("node", ["scripts/record-demo.mjs", ...(HEADLESS ? ["--rehearse"] : [])], { cwd: process.cwd() });
+const driver = spawn("node", ["scripts/record-demo.mjs", ...process.argv.slice(2)], { cwd: process.cwd() });
 let buffer = "";
 driver.stdout.on("data", (d) => { buffer += d; logStream.write(d); process.stdout.write(d); });
 driver.stderr.on("data", (d) => { buffer += d; logStream.write(d); process.stderr.write(d); });
@@ -40,7 +42,7 @@ console.log(HEADLESS ? "rehearsal pass (no recorder)" : `recording ${RECORD_SECO
 
 // wait for the first scene to be ready, then start the single continuous recorder
 if (!HEADLESS) {
-  const ready = await until(/READY dashboard/, 300_000);
+  const ready = await until(new RegExp(`READY ${SCENES[0]}`), 300_000);
   if (!ready) { console.error("driver never became READY"); process.exit(1); }
   writeFileSync(`${DIR}/record-start`, String(Date.now()));
   spawn("screencapture", ["-V" + RECORD_SECONDS, `${DIR}/session.mov`], { stdio: "ignore" });
