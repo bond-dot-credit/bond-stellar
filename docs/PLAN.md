@@ -100,7 +100,7 @@ Mainnet uses Circle USDC and a real aggregator. Neither is pinned yet.
    This decides whether simulated KYC is enough.
 3. Pin Circle USDC on Stellar mainnet and check it on-chain.
 4. Real KYC provider, replacing the flag, before raising the cap.
-5. External audit of the vault and its aggregator integration.
+5. External review of the vault and its aggregator integration.
 6. Multisig admin, and a runbook for pause, agent rotation, and the incident drill.
 7. Counsel review: taking public deposits into RWA products is a regulated activity in
    most jurisdictions. The 100 USDC cap does not remove that requirement.

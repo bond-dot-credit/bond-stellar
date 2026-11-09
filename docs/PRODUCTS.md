@@ -45,7 +45,7 @@ Console (static UI) ──► dashboard, venues, activity, admin
 - **M2 — Adapter contract:** wrap the chosen venue behind the existing
   `deposit / request_redeem / claim / value_of` interface so the vault needs zero logic changes
 - **M3 — Ops hardening:** multisig admin, agent rotation runbook
-- **M4 — Mainnet launch:** pin Circle USDC, external audit, small cap launch, raise cap
+- **M4 — Mainnet launch:** pin Circle USDC, external review, small cap launch, raise cap
   progressively
 
 ---
