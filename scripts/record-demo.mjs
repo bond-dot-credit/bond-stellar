@@ -384,6 +384,9 @@ async function main() {
   const browser = await puppeteer.launch({
     executablePath: CHROME,
     headless: HEADED ? false : "new",
+    // headed: no viewport emulation — puppeteer's default 800x600 dpr-1 emulation
+    // otherwise pins the window small and non-retina
+    defaultViewport: HEADED ? null : { width: 1352, height: 878 },
     // without --enable-automation Chrome shows no "controlled by test software" infobar
     ignoreDefaultArgs: ["--enable-automation"],
     args: [
@@ -392,15 +395,28 @@ async function main() {
       "--no-default-browser-check",
       "--disable-session-crashed-bubble",
       "--hide-crash-restore-bubble",
-      ...(HEADED ? ["--start-fullscreen", `--app=${PAGE_URL}`] : []),
+      ...(HEADED ? [`--app=${PAGE_URL}`] : []),
     ],
   });
   const page = (await browser.pages())[0];
   page.on("error", (e) => log(`PAGE CRASH: ${String(e).slice(0, 120)}`));
   page.on("framenavigated", (f) => { if (f === page.mainFrame()) log(`NAVIGATED -> ${f.url().slice(0, 60)}`); });
-  if (!HEADED) await page.setViewport({ width: 1352, height: 878 });
   await page.evaluateOnNewDocument((src) => window.eval(src), wallet);
   await page.goto(PAGE_URL, { waitUntil: "domcontentloaded" });
+  if (HEADED) {
+    // macOS fullscreen is unreachable from automation here (Chrome 156 ignores
+    // windowState, keystrokes need accessibility). The --app window opens at
+    // (0, menuBar) covering the full display width; record its rect so the
+    // assembly can crop the menu bar and the empty rest of the display away.
+    await S(1500);
+    const rect = await page.evaluate(() => ({
+      x: window.screenLeft, y: window.screenTop, w: window.innerWidth, h: window.innerHeight,
+      sw: window.screen.width, sh: window.screen.height, dpr: window.devicePixelRatio,
+    }));
+    writeFileSync(`${SCENES_DIR}/window-rect.json`, JSON.stringify(rect));
+    log(`window rect ${JSON.stringify(rect)}`);
+    if (rect.dpr < 2) log("WARN: window is not on the retina backing");
+  }
   await waitForData(page);
   log("DATA READY");
 
