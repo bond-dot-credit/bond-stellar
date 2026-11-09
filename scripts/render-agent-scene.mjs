@@ -3,13 +3,35 @@
 // Terminal footage kept being polluted by other automation on the recording machine;
 // every line below is verbatim from agent/agent.mjs output (see demo/ notes).
 import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
 import ffmpegPath from "ffmpeg-static";
+
+// Match the assembled scenes: the app window's crop of the retina capture.
+function outputSize() {
+  try {
+    let probe = "";
+    try {
+      execFileSync(ffmpegPath, ["-i", "/tmp/bond-demo-scenes/session.mov"], { stdio: ["ignore", "pipe", "pipe"] });
+    } catch (e) {
+      probe = e.stderr?.toString() ?? ""; // ffmpeg -i reports on stderr and exits 1
+    }
+    const m = probe.match(/(\d{3,4})x(\d{3,4})/);
+    const rect = JSON.parse(readFileSync("/tmp/bond-demo-scenes/window-rect.json", "utf8"));
+    const k = Number(m[1]) / rect.sw;
+    return {
+      w: Math.round(rect.w * k / 2) * 2,
+      h: Math.round(rect.h * k / 2) * 2,
+    };
+  } catch {
+    return { w: 2704, h: 1696 };
+  }
+}
+const { w: W, h: H } = outputSize();
+const K = W / 1280; // geometry scale vs the 720p design
 
 const FONT = "/System/Library/Fonts/Supplemental/Andale Mono.ttf";
 const OUT = "/tmp/bond-demo-scenes/scene-04-agent.mp4";
 const DUR = 22;
-const W = 2704, H = 1520; // native 16:9 crop of the retina capture
-const K = W / 1280; // geometry scale vs the 720p design
 
 // [text, reveal time (s), color]
 const LINES = [

@@ -395,7 +395,7 @@ async function main() {
       "--no-default-browser-check",
       "--disable-session-crashed-bubble",
       "--hide-crash-restore-bubble",
-      ...(HEADED ? [`--app=${PAGE_URL}`] : []),
+      ...(HEADED ? ["--start-fullscreen", `--app=${PAGE_URL}`] : []),
     ],
   });
   const page = (await browser.pages())[0];
@@ -403,12 +403,13 @@ async function main() {
   page.on("framenavigated", (f) => { if (f === page.mainFrame()) log(`NAVIGATED -> ${f.url().slice(0, 60)}`); });
   await page.evaluateOnNewDocument((src) => window.eval(src), wallet);
   await page.goto(PAGE_URL, { waitUntil: "domcontentloaded" });
+  await waitForData(page);
+  log("DATA READY");
   if (HEADED) {
     // macOS fullscreen is unreachable from automation here (Chrome 156 ignores
-    // windowState, keystrokes need accessibility). The --app window opens at
-    // (0, menuBar) covering the full display width; record its rect so the
-    // assembly can crop the menu bar and the empty rest of the display away.
-    await S(1500);
+    // windowState, keystrokes need accessibility). --start-fullscreen instead
+    // maximizes the --app window to full display width below the menu bar; the
+    // assembly crops the recording to this rect so no menu bar or desktop shows.
     const rect = await page.evaluate(() => ({
       x: window.screenLeft, y: window.screenTop, w: window.innerWidth, h: window.innerHeight,
       sw: window.screen.width, sh: window.screen.height, dpr: window.devicePixelRatio,
@@ -417,8 +418,6 @@ async function main() {
     log(`window rect ${JSON.stringify(rect)}`);
     if (rect.dpr < 2) log("WARN: window is not on the retina backing");
   }
-  await waitForData(page);
-  log("DATA READY");
 
   const scenes = [
     ["dashboard", (b, p) => sceneDashboard(p)],

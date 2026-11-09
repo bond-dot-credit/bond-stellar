@@ -40,19 +40,31 @@ function sh(...args) {
 
 const run = (cmd, args) => execFileSync(cmd, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 
-// Native resolution of the retina capture; crop to 16:9 without downscaling.
+// Native resolution of the retina capture, cropped to the app window's rect
+// (recorded by the driver) so no menu bar or empty desktop shows.
 function videoSize(file) {
-  const info = run(FFMPEG, ["-i", file]);
+  let info = "";
+  try {
+    execFileSync(FFMPEG, ["-i", file], { stdio: ["ignore", "pipe", "pipe"] });
+  } catch (e) {
+    info = e.stderr?.toString() ?? ""; // ffmpeg -i reports on stderr and exits 1
+  }
   const m = info.match(/(\d{3,4})x(\d{3,4})/) ?? [0, "2704", "1756"];
-  const w = Math.floor(Number(m[1]) / 2) * 2;
-  const h = Math.floor((w * 9) / 16 / 2) * 2;
-  return { w, h };
+  return { w: Math.floor(Number(m[1]) / 2) * 2, h: Math.floor(Number(m[2]) / 2) * 2 };
 }
-const SIZE = videoSize(`${DIR}/session.mov`);
-const WIDTH = SIZE.w;
-const HEIGHT = SIZE.h;
+const REC = videoSize(`${DIR}/session.mov`);
+const rect = existsSync(`${DIR}/window-rect.json`)
+  ? JSON.parse(readFileSync(`${DIR}/window-rect.json`, "utf8"))
+  : { x: 0, y: 30, w: 1352, h: 848, sw: 1352 };
+const K = REC.w / rect.sw; // recording pixels per CSS point
+const CROP = {
+  x: Math.round(rect.x * K), y: Math.round(rect.y * K),
+  w: Math.round(rect.w * K / 2) * 2, h: Math.round(rect.h * K / 2) * 2,
+};
+const WIDTH = CROP.w;
+const HEIGHT = CROP.h;
 const S = WIDTH / 1280; // caption scale vs the 720p design
-console.log(`output ${WIDTH}x${HEIGHT} (16:9 crop of the retina capture)`);
+console.log(`recording ${REC.w}x${REC.h} -> window crop ${WIDTH}x${HEIGHT} at (${CROP.x},${CROP.y})`);
 
 // --- narrations ---
 const narrDir = `${DIR}/narr`;
@@ -109,7 +121,7 @@ SCENES.forEach((s, i) => {
     case "agent": startMs = at("tick-done") - 16000; endMs = at("tick-done") + 1500; break;
     case "venues-activity": startMs = at("feed-shown") - 8500; endMs = at("feed-shown") + 2500; break;
     case "withdraw": startMs = at("mined") - 14000; endMs = at("tx-expanded") + 1500; break;
-    case "admin": startMs = at("connected-as-owner") - 5000; endMs = at("page-scrolled") + 2500; break;
+    case "admin": startMs = at("connected-as-owner") - 2000; endMs = at("page-scrolled") + 2500; break;
     default: startMs = evts[0]?.at ?? recordStart; endMs = startMs + s.slot * 1000;
   }
   startMs = Math.max(startMs, recordStart + 200);
@@ -123,7 +135,7 @@ SCENES.forEach((s, i) => {
     "-y", "-ss", ((startMs - recordStart) / 1000).toFixed(2), "-i", session,
     "-t", (durMs / 1000).toFixed(2),
     "-vf",
-    `crop=${WIDTH}:${HEIGHT}:(iw-${WIDTH})/2:(ih-${HEIGHT})/2,` +
+    `crop=${WIDTH}:${HEIGHT}:${CROP.x}:${CROP.y},` +
     `tpad=stop_mode=clone:stop=${Math.ceil(pad * 25)},setpts=PTS-STARTPTS,` +
     `drawtext=fontfile='${FONT}':text='${caption}':fontcolor=white:fontsize=${Math.round(26 * S)}:box=1:boxcolor=black@0.55:boxborderw=${Math.round(18 * S)}:x=(w-text_w)/2:y=h-text_h-${Math.round(48 * S)}:line_spacing=${Math.round(8 * S)}`,
     "-c:v", "libx264", "-preset", "fast", "-crf", "19", "-pix_fmt", "yuv420p",
