@@ -10,3 +10,6 @@ ui/wallet.json
 
 # demo wallet build output (contains testnet secrets)
 demo/mock-wallet/build/
+
+# demo video is delivered locally, never committed
+docs/console-demo.mp4
